@@ -28,7 +28,7 @@ class ActionRunner:
     LOG_SENTINEL = 'XXX_THE_END_OF_A_WHISK_ACTIVATION_XXX'
 
     def __init__(self, source = None, binary = None):
-        defaultBinary = '/action/a.out'
+        defaultBinary = '/action/exec'
         self.source = source if source else defaultBinary
         self.binary = binary if binary else defaultBinary
 

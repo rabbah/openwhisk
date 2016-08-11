@@ -14,6 +14,10 @@
 # limitations under the License.
 #
 
+# This script is useful for testing the action proxy (or its derivatives)
+# in combination with delete-build-run.sh. Use it to run the action
+# with given parameters e.g., python run.py '{"a":"A"}'.
+
 import os
 import sys
 import json

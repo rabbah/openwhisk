@@ -3,6 +3,10 @@
 # Useful for local testing.
 # USE WITH CAUTION !!
 
+# This script is useful for testing the action proxy (or its derivatives)
+# in combination with [init,run].py. Use it to rebuild the container image
+# and start the proxy: delete-build-run.sh whisk/dockerskeleton.
+
 # Removes all previously built instances.
 remove=$(docker ps -a -q)
 if [[ !  -z  $remove  ]]; then

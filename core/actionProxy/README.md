@@ -28,5 +28,5 @@ wsk action create dockerSkeletonExample --docker <dockerhub username>/whiskExamp
 wsk action invoke dockerSkeletonExample --blocking
 ```
 
-The binary to execute must be located in the `/action` folder. The name of the binary
-(or shell script as in the standard bundle) must be `/action/a.out`.
+The executable file must be located in the `/action` folder.
+The name of the executable must be `/action/exec` and can be any file with executable permissions.
