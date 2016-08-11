@@ -80,6 +80,7 @@ import whisk.core.entity.LogLimit
 import whisk.core.entity.Namespace
 import whisk.core.entity.NodeJS6Exec
 import whisk.core.entity.NodeJSExec
+import whisk.core.entity.PythonExec
 import whisk.core.entity.SemVer
 import whisk.core.entity.Subject
 import whisk.core.entity.Swift3Exec
@@ -318,10 +319,10 @@ class Invoker(
     private val LogRetryCount = 15
     private val LogRetry = 100 // millis
     private val LOG_ACTIVATION_SENTINEL = "XXX_THE_END_OF_A_WHISK_ACTIVATION_XXX"
-    private val nodejsImageName = WhiskAction.containerImageName(NodeJSExec("", None), config.dockerRegistry, config.dockerImageTag)
-    private val nodejs6ImageName = WhiskAction.containerImageName(NodeJS6Exec("", None), config.dockerRegistry, config.dockerImageTag)
-    private val swiftImageName = WhiskAction.containerImageName(SwiftExec(""), config.dockerRegistry, config.dockerImageTag)
-    private val swift3ImageName = WhiskAction.containerImageName(Swift3Exec(""), config.dockerRegistry, config.dockerImageTag)
+    private val sentinelledActions = {
+        for (exec <- Seq(NodeJSExec("", None), NodeJS6Exec("", None), PythonExec(""), SwiftExec(""), Swift3Exec("")))
+            yield WhiskAction.containerImageName(exec, config.dockerRegistry, config.dockerImageTag)
+    }.toSet
 
     /**
      * Waits for log cursor to advance. This will retry up to tries times
@@ -338,9 +339,7 @@ class Invoker(
             val rawLogBytes = con.getDockerLogContent(con.lastLogSize, size, runningInContainer)
             val rawLog = new String(rawLogBytes, "UTF-8")
 
-            val isNodeJs = con.image == nodejsImageName || con.image == nodejs6ImageName
-            val isSwift = con.image == swiftImageName || con.image == swift3ImageName
-            val (complete, isTruncated, logs) = processJsonDriverLogContents(rawLog, isNodeJs || isSwift, limit)
+            val (complete, isTruncated, logs) = processJsonDriverLogContents(rawLog, sentinelledActions.contains(con.image), limit)
 
             if (tries > 0 && !complete && !isTruncated) {
                 info(this, s"log cursor advanced but missing sentinel, trying $tries more times")
@@ -542,8 +541,8 @@ class Invoker(
         InvokerKeys.start(instance),
         InvokerKeys.status(instance),
         { index =>
-            (if (index % 5 == 0) getUserActivationCounts() else Map[String,JsValue]()) ++
-            Map(InvokerKeys.activationCount(instance) -> activationCounter.cur.toJson)
+            (if (index % 5 == 0) getUserActivationCounts() else Map[String, JsValue]()) ++
+                Map(InvokerKeys.activationCount(instance) -> activationCounter.cur.toJson)
         })
 
     // This is used for the getContainer endpoint used in perfContainer testing it is not real state
