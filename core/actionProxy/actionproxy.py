@@ -53,25 +53,29 @@ class ActionRunner:
     def verify(self):
         return (os.path.isfile(self.binary) and os.access(self.binary, os.X_OK))
 
+    def env(self, message, input):
+        # make sure to include all the env vars passed in by the invoker
+        env = os.environ
+        # as well as the input arguments (some runtimes may use this for input rather than the command line)
+        if 'authKey' in message:
+            env['AUTH_KEY'] = message['authKey']
+        env['WHISK_INPUT'] = input
+        return env
+
+    # Runs the action. Called iff self.verify() is True.
     def run(self, message):
         def error(msg):
             # fall through (exception and else case are handled the same way)
             sys.stdout.write('%s\n' % msg)
             return (502, { 'error': 'The action did not return a dictionary.'})
 
-        # make sure to include all the env vars passed in by the invoker
-        env = os.environ
-        # as well as the input arguments (some runtimes may use this for input rather than the command line)
-        if 'authKey' in message:
-            env['AUTH_KEY'] = message['authKey']
-        env['WHISK_INPUT'] = json.dumps(message)
-
         try:
+            input = json.dumps(message)
             p = subprocess.Popen(
-                [ self.binary, env['WHISK_INPUT'] ],
+                [ self.binary, input ],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                env=env)
+                env=self.env(message, input))
         except Exception as e:
             return error(e)
 
@@ -134,7 +138,9 @@ def run():
     def complete(response):
         # Add sentinel to stdout/stderr
         sys.stdout.write('%s\n' % ActionRunner.LOG_SENTINEL)
+        sys.stdout.flush()
         sys.stderr.write('%s\n' % ActionRunner.LOG_SENTINEL)
+        sys.stderr.flush()
         return response
 
     def error():

@@ -32,11 +32,15 @@ import scala.sys.process.stringToProcess
 import scala.util.Random
 import scala.util.Try
 
+import org.scalatest.Finders
+import org.scalatest.FlatSpec
+import org.scalatest.Matchers
+
 import common.WhiskProperties
 import spray.json.JsObject
+import spray.json.JsString
 import spray.json.JsValue
 import spray.json.pimpString
-import whisk.common.HttpUtils
 
 /**
  * For testing convenience, this interface abstracts away the REST calls to a
@@ -45,6 +49,20 @@ import whisk.common.HttpUtils
 trait ActionContainer {
     def init(value: JsValue): (Int, Option[JsObject])
     def run(value: JsValue): (Int, Option[JsObject])
+}
+
+trait ActionProxyContainerTestUtils extends FlatSpec with Matchers {
+    import ActionContainer.{ filterSentinel, sentinel }
+
+    def initPayload(code: String) = JsObject("value" -> JsObject("code" -> JsString(code)))
+    def runPayload(args: JsValue) = JsObject("value" -> args)
+
+    def checkStreams(out: String, err: String, additionalCheck: (String, String) => Unit) = {
+        out should include(sentinel)
+        err should include(sentinel)
+        val (o, e) = (filterSentinel(out), filterSentinel(err))
+        additionalCheck(o, e)
+    }
 }
 
 object ActionContainer {

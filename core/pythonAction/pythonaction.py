@@ -15,85 +15,47 @@
 #
 
 import sys
-import os
-import json
 import subprocess
 import codecs
+sys.path.append('../actionProxy')
+from actionproxy import ActionRunner, main, setRunner
+import json
 import traceback
-import flask
-from gevent.wsgi import WSGIServer
 
-proxy = flask.Flask(__name__)
-proxy.debug = False
+class PythonRunner(ActionRunner):
 
-@proxy.route("/init", methods=['POST'])
-def init():
-    flask.g = None
-    payload = flask.request.get_json(force=True,silent=True)
-    if not payload or not isinstance(payload, dict):
-        flask.abort(403)
+    def __init__(self):
+        ActionRunner.__init__(self)
+        self.fn = None
 
-    message = payload.get("value", {})
-    if "code" in message:
-        # store the compiled code
+    def init(self, message):
+        if 'code' in message:
+            try:
+                self.fn = compile(message["code"], filename = 'action', mode = 'exec')
+            except Exception:
+                traceback.print_exc(file = sys.stderr, limit = 0)
+        return self.verify()
+
+    def verify(self):
+        return self.fn is not None
+
+    def run(self, message):
+        # initialize the namespace for the execution
+        namespace = {}
+        result = None
         try:
-            flask.g = compile(message["code"], filename = 'action', mode = 'exec')
+            namespace['param'] = message
+            exec(self.fn, namespace)
+            exec("fun = main(param)", namespace)
+            result = namespace['fun']
         except Exception:
-            flask.g = None
-            traceback.print_exc(file = sys.stderr, limit = 0)
-            sys.stderr.flush()
-            response = flask.jsonify({"error": "The action failed to compile. See logs for details." })
-            response.status_code = 502
-            return response
-        return ('OK', 200)
-    else:
-        flask.abort(403)
+            traceback.print_exc(file = sys.stderr)
 
-@proxy.route("/run", methods=['POST'])
-def run():
-    message = flask.request.get_json(force=True,silent=True)
+        if result and isinstance(result, dict):
+            return (200, result)
+        else:
+            return (502, { 'error': 'The action did not return a dictionary.'})
 
-    if not message or not isinstance(message, dict):
-        flask.abort(403)
-
-    if not "value" in message:
-        flask.abort(403)
-
-    value = message["value"]
-
-    if not isinstance(value, dict):
-        flask.abort(403)
-
-    if flask.g is None:
-        # no code to execute
-        response = flask.jsonify({"error": "No code to execute (compilation failed). See logs for details." })
-        response.status_code = 502
-        return response
-
-    # initialize the namespace for the execution
-    namespace = {}
-    result = None
-    try:
-        namespace['param'] = value
-        exec(flask.g, namespace)
-        exec("fun = main(param)", namespace)
-        result = namespace['fun']
-    except Exception:
-        traceback.print_exc(file = sys.stderr)
-    sys.stdout.flush()
-    sys.stderr.flush()
-    if result and isinstance(result, dict):
-        response = flask.jsonify(result)
-        response.status_code = 200
-        return response
-    else:
-        response = flask.jsonify({"error": "The action did not return a dictionary and returned this instead '%s'." % result })
-        response.status_code = 502
-        return response
-
-
-# start server in a forever loop
 if __name__ == "__main__":
-    PORT = int(os.getenv("FLASK_PROXY_PORT", 8080))
-    server = WSGIServer(('', PORT), proxy, log=None)
-    server.serve_forever()
+    setRunner(PythonRunner())
+    main()

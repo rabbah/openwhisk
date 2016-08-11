@@ -17,38 +17,21 @@
 package actionContainers
 
 import org.junit.runner.RunWith
-import org.scalatest.BeforeAndAfter
 import org.scalatest.Finders
-import org.scalatest.FlatSpec
-import org.scalatest.Matchers
 import org.scalatest.junit.JUnitRunner
 
 import ActionContainer.withContainer
-import ActionContainer.sentinel
-import ActionContainer.filterSentinel
+import spray.json.JsNull
 import spray.json.JsNumber
 import spray.json.JsObject
 import spray.json.JsString
-import spray.json.JsValue
-import spray.json.JsNull
 
 @RunWith(classOf[JUnitRunner])
-class ActionProxyContainerTests extends FlatSpec with Matchers {
+class ActionProxyContainerTests extends ActionProxyContainerTestUtils {
 
-    def withPythonContainer(code: ActionContainer => Unit) = withContainer("whisk/actionproxy")(code)
-    def initPayload(code: String) = JsObject(
-        "value" -> JsObject(
-            "code" -> JsString(code)))
-    def runPayload(args: JsValue) = JsObject("value" -> args)
+    def withPythonContainer(code: ActionContainer => Unit) = withContainer("whisk/dockerskeleton")(code)
 
     behavior of "whisk/dockerskeleton"
-
-    def checkStreams(out: String, err: String, additionalCheck: (String, String) => Unit) = {
-        out should include(sentinel)
-        err should include(sentinel)
-        val (o, e) = (filterSentinel(out), filterSentinel(err))
-        additionalCheck(o, e)
-    }
 
     it should "run sample without init" in {
         val (out, err) = withPythonContainer { c =>

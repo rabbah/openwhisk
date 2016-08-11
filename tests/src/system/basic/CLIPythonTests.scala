@@ -74,7 +74,7 @@ class CLIPythonTests
 
             withActivation(wsk.activation, wsk.action.invoke(name)) {
                 activation =>
-                    activation.getFieldPath("response", "result", "error") shouldBe Some(JsString("The action failed to compile. See logs for details."))
+                    activation.getFieldPath("response", "result", "error") shouldBe Some(JsString("The action failed to generate or locate a binary. See logs for details."))
                     activation.fields("logs").toString should { not include ("pythonaction.py") and not include ("flask") }
             }
     }

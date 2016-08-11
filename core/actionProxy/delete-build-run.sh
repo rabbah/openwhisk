@@ -9,7 +9,7 @@ if [[ !  -z  $remove  ]]; then
     docker rm $remove
 fi
 
-image=${1:-whisk/actionproxy}
+image=${1:-whisk/dockerskeleton}
 docker build -t $image .
 
 echo ""
