@@ -18,7 +18,10 @@ package actionContainers
 
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
-import spray.json.{JsBoolean, JsObject}
+
+import ActionContainer.filterSentinel
+import spray.json.JsBoolean
+import spray.json.JsObject
 
 @RunWith(classOf[JUnitRunner])
 class NodeJs6ActionContainerTests extends NodeJsActionContainerTests {
@@ -45,8 +48,8 @@ class NodeJs6ActionContainerTests extends NodeJsActionContainerTests {
 
         }
 
-        filtered(out).trim shouldBe empty
-        filtered(err).trim shouldBe empty
+        filterSentinel(out).trim shouldBe empty
+        filterSentinel(err).trim shouldBe empty
     }
 
 }

@@ -86,6 +86,10 @@ object ActionContainer {
         Await.result(proc(docker(cmd)), t)
     }
 
+    // Filters out the sentinel markers inserted by the container (see relevant private code in Invoker.scala)
+    val sentinel = "XXX_THE_END_OF_A_WHISK_ACTIVATION_XXX"
+    def filterSentinel(str: String) = str.replaceAll(sentinel, "").trim
+
     def withContainer(imageName: String, environment: Map[String, String] = Map.empty)(
         code: ActionContainer => Unit): (String, String) = {
         val rand = { val r = Random.nextInt; if (r < 0) -r else r }

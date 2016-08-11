@@ -31,6 +31,7 @@ test {
 test.dependsOn([
     ':core:nodejsAction:distDocker',
     ':core:nodejs6Action:distDocker',
+    ':core:actionProxy:distDocker',
     ':core:pythonAction:distDocker',
     ':core:javaAction:distDocker',
     ':core:swiftAction:distDocker',
