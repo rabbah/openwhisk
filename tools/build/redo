@@ -308,7 +308,7 @@ Components = [
     makeComponent('dockersdk',
                   'build docker action SDK (to deploy, use edge component)',
                   yaml = False,
-                  gradle = 'sdk:docker'),
+                  gradle = 'core:actionProxy'),
 
     makeComponent('zookeeper',
                   'build zookeepr only (to deploy, use kakfa component)',
