@@ -29,26 +29,23 @@ import scala.util.Random
 import common.WhiskProperties
 
 @RunWith(classOf[JUnitRunner])
-class SwiftActionContainerTests extends FlatSpec
-    with Matchers
-    with BeforeAndAfter {
+class SwiftActionContainerTests extends ActionProxyContainerTestUtils {
 
     // note: "out" will likely not be empty in some swift build as the compiler
     // prints status messages and there doesn't seem to be a way to quiet them
-    val checkStdOutEmpty = false
-    val swiftContainerImageName = "whisk/swiftaction"
+    val enforceEmptyOutputStream = true
+    lazy val swiftContainerImageName = "whisk/swiftaction"
 
     // Helpers specific to swiftaction
-    def withSwiftContainer(env: Map[String,String] = Map.empty)(code: ActionContainer => Unit) = withContainer(swiftContainerImageName, env)(code)
-    def initPayload(code: String) = JsObject(
-        "value" -> JsObject(
-            "name" -> JsString("someSwiftAction"),
-            "code" -> JsString(code)))
-    def runPayload(args: JsValue) = JsObject(
-            "authKey" -> JsString(WhiskProperties.readAuthKey(WhiskProperties.getAuthFileForTesting)),
-            "value" -> args)
+    def withSwiftContainer(env: Map[String, String] = Map.empty)(code: ActionContainer => Unit) = {
+        withContainer(swiftContainerImageName, env)(code)
+    }
 
-    behavior of "whisk/swiftaction"
+    override def runPayload(args: JsValue) = JsObject(
+        "authKey" -> JsString(WhiskProperties.readAuthKey(WhiskProperties.getAuthFileForTesting)),
+        "value" -> args)
+
+    behavior of swiftContainerImageName
 
     it should "support valid flows" in {
         val (out, err) = withSwiftContainer() { c =>
@@ -73,12 +70,15 @@ class SwiftActionContainerTests extends FlatSpec
             }
         }
 
-        if (checkStdOutEmpty) out.trim shouldBe empty
-        err.trim shouldBe empty
+        checkStreams(out, err, {
+            case (o, e) =>
+                if (enforceEmptyOutputStream) o shouldBe empty
+                e shouldBe empty
+        })
     }
 
     it should "return some error on action error" in {
-        withSwiftContainer() { c =>
+        val (out, err) = withSwiftContainer() { c =>
             val code = """
                 | // You need an indirection, or swiftc detects the div/0
                 | // at compile-time. Smart.
@@ -99,10 +99,16 @@ class SwiftActionContainerTests extends FlatSpec
             runRes shouldBe defined
             runRes.get.fields.get("error") shouldBe defined
         }
+
+        checkStreams(out, err, {
+            case (o, e) =>
+                if (enforceEmptyOutputStream) o shouldBe empty
+                e shouldBe empty
+        })
     }
 
     it should "log stdout" in {
-        val (out, _) = withSwiftContainer() { c =>
+        val (out, err) = withSwiftContainer() { c =>
             val code = """
                 | func main(args: [String: Any]) -> [String: Any] {
                 |     print("Hello logs!")
@@ -117,11 +123,15 @@ class SwiftActionContainerTests extends FlatSpec
             runCode should be(200)
         }
 
-        out should include("Hello logs!")
+        checkStreams(out, err, {
+            case (o, e) =>
+                o should include("Hello logs!")
+                e shouldBe empty
+        })
     }
 
     it should "log compilation errors" in {
-        val (_, err) = withSwiftContainer() { c =>
+        val (out, err) = withSwiftContainer() { c =>
             val code = """
               | 10 PRINT "Hello!"
               | 20 GOTO 10
@@ -133,11 +143,16 @@ class SwiftActionContainerTests extends FlatSpec
             val (runCode, runRes) = c.run(runPayload(JsObject("basic" -> JsString("forever"))))
             runCode should be(502)
         }
-        err.toLowerCase should include("error")
+
+        checkStreams(out, err, {
+            case (o, e) =>
+                if (enforceEmptyOutputStream) o shouldBe empty
+                e.toLowerCase should include("error")
+        })
     }
 
     it should "support application errors" in {
-        withSwiftContainer() { c =>
+        val (out, err) = withSwiftContainer() { c =>
             val code = """
                 | func main(args: [String: Any]) -> [String: Any] {
                 |     return [ "error": "sorry" ]
@@ -151,15 +166,21 @@ class SwiftActionContainerTests extends FlatSpec
             runCode should be(200) // action writer returning an error is OK
 
             runRes shouldBe defined
-            runRes.get.fields.get("error") shouldBe defined
+            runRes should be(Some(JsObject("error" -> JsString("sorry"))))
         }
+
+        checkStreams(out, err, {
+            case (o, e) =>
+                if (enforceEmptyOutputStream) o shouldBe empty
+                e shouldBe empty
+        })
     }
 
     it should "enforce that the user returns an object" in {
-        withSwiftContainer() { c =>
+        val (out, err) = withSwiftContainer() { c =>
             val code = """
                 | func main(args: [String: Any]) -> String {
-                |     return "rebel, rebel"
+                |     return "rebel"
                 | }
             """.stripMargin
 
@@ -168,8 +189,14 @@ class SwiftActionContainerTests extends FlatSpec
 
             val (runCode, runRes) = c.run(runPayload(JsObject()))
             runCode should be(502)
-            runRes.get.fields.get("error") shouldBe defined
+            runRes should be(Some(JsObject("error" -> JsString("The action did not return a dictionary."))))
         }
+
+        print(out, err)
+        checkStreams(out, err, {
+            case (o, e) =>
+                o+e should include("rebel") // swift 3 emits to stdout, swift 2 to stderr
+        })
     }
 
     it should "ensure EDGE_HOST is available as an environment variable" in {
@@ -186,17 +213,17 @@ class SwiftActionContainerTests extends FlatSpec
             """.stripMargin
 
             val (initCode, _) = c.init(initPayload(code))
-
             initCode should be(200)
 
             val (runCode, response) = c.run(runPayload(JsObject()))
-
             runCode should be(200)
-
             response.get.fields.get("host") should be(Some(JsString("realhost:80")))
         }
 
-        if (checkStdOutEmpty) out.trim shouldBe empty
-        err.trim shouldBe empty
+        checkStreams(out, err, {
+            case (o, e) =>
+                if (enforceEmptyOutputStream) o shouldBe empty
+                e shouldBe empty
+        })
     }
 }
