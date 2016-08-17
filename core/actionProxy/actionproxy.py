@@ -27,32 +27,51 @@ class ActionRunner:
 
     LOG_SENTINEL = 'XXX_THE_END_OF_A_WHISK_ACTIVATION_XXX'
 
+    # initializes the runner
+    # @param source the path where the source code will be located (if any)
+    # @param binary the path where the binary wil be located (may be the same as source code path)
     def __init__(self, source = None, binary = None):
         defaultBinary = '/action/exec'
         self.source = source if source else defaultBinary
         self.binary = binary if binary else defaultBinary
 
+    # extracts from the JSON object message a 'code' property and
+    # writes it to the <source> path. The source code may have an
+    # an optional <epilogue>. The source code is subsequently built
+    # to produce the <binary> that is executed during <run>.
+    # @param message is a JSON object, should contain 'code'
+    # @return True iff binary exists and is executable
     def init(self, message):
         if 'code' in message:
             with codecs.open(self.source, 'w', 'utf-8') as fp:
                 fp.write(str(message['code']))
+                # write source epilogue if any
                 self.epilogue(fp)
             try:
+                # build the source
                 self.build()
             except Exception:
                 None  # do nothing, verify will signal failure if binary not executable
+        # verify the binary exists and is executable
         return self.verify()
 
+    # optionally appends source to the loaded code during <init>
+    # @param fp the file stream writer
     def epilogue(self, fp):
         return
 
+    # optionally builds the source code loaded during <init> into an executable
     def build(self):
-        perms = os.stat(self.binary)
-        os.chmod(self.binary, st.st_mode | stat.S_IEXEC)
+        return
 
+    # confirms the binary exists and is executable
     def verify(self):
         return (os.path.isfile(self.binary) and os.access(self.binary, os.X_OK))
 
+    # constructs an environment for the action to run in
+    # @param message is a JSON object containing an 'authKey' received from invoker
+    # @param input is a JSON object as the input to the action
+    # @return an environment dictionary for the action process
     def env(self, message, input):
         # make sure to include all the env vars passed in by the invoker
         env = os.environ
@@ -62,7 +81,8 @@ class ActionRunner:
         env['WHISK_INPUT'] = input
         return env
 
-    # Runs the action. Called iff self.verify() is True.
+    # runs the action, called iff self.verify() is True.
+    # @param message is a JSON object representing the input to the action
     def run(self, message):
         def error(msg):
             # fall through (exception and else case are handled the same way)

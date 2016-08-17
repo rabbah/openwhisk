@@ -1,4 +1,4 @@
-# Dockerfile for python action
+# Dockerfile for docker skeleton (useful for running blackbox binaries, scripts, or python actions).
 FROM buildpack-deps:trusty
 
 ENV DEBIAN_FRONTEND noninteractive
@@ -18,7 +18,7 @@ RUN mkdir -p /actionProxy
 ADD actionproxy.py /actionProxy/
 
 RUN mkdir -p /action
-ADD example.sh /action/exec
+ADD stub.sh /action/exec
 RUN chmod +x /action/exec
 
 CMD ["/bin/bash", "-c", "cd actionProxy && python -u actionproxy.py"]

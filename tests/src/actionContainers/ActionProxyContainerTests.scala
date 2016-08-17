@@ -29,32 +29,32 @@ import spray.json.JsString
 @RunWith(classOf[JUnitRunner])
 class ActionProxyContainerTests extends ActionProxyContainerTestUtils {
 
-    def withPythonContainer(code: ActionContainer => Unit) = withContainer("whisk/dockerskeleton")(code)
+    def withPythonContainer(code: ActionContainer => Unit) = withContainer("openwhisk/dockerskeleton")(code)
 
     behavior of "whisk/dockerskeleton"
 
     it should "run sample without init" in {
         val (out, err) = withPythonContainer { c =>
-            val (runCode, out) = c.run(JsNull)
+            val (runCode, out) = c.run(JsObject())
             runCode should be(200)
-            out should be(Some(JsObject("msg" -> JsString("Hello from bash script!"))))
+            out should be(Some(JsObject("msg" -> JsString("This is a stub action. Replace it with custom logic."))))
         }
 
         checkStreams(out, err, {
-            case (o, _) => o should include("Actions may log to stdout")
+            case (o, _) => o should include("This is a stub action")
         })
     }
 
     it should "run sample with init that does nothing" in {
         val (out, err) = withPythonContainer { c =>
-            val (initCode, _) = c.init(JsNull)
+            val (initCode, _) = c.init(JsObject())
             initCode should be(200)
-            val (runCode, out) = c.run(JsNull)
+            val (runCode, out) = c.run(JsObject())
             runCode should be(200)
-            out should be(Some(JsObject("msg" -> JsString("Hello from bash script!"))))
+            out should be(Some(JsObject("msg" -> JsString("This is a stub action. Replace it with custom logic."))))
         }
         checkStreams(out, err, {
-            case (o, _) => o should include("Actions may log to stdout")
+            case (o, _) => o should include("This is a stub action")
         })
     }
 
@@ -102,8 +102,21 @@ class ActionProxyContainerTests extends ActionProxyContainerTestUtils {
         })
     }
 
-    it should "run sample with argument" in {
+    it should "run a bash script" in {
         val (out, err) = withPythonContainer { c =>
+            val code = """
+                |#!/bin/bash
+                |echo 'Actions may log to stdout'
+                |if [[ -z $1 || $1 == '{}' ]]; then
+                |   echo '{ "msg": "Hello from bash script!" }'
+                |else
+                |   echo $1 # echo the arguments back as the result
+                |fi
+            """.stripMargin.trim
+
+            val (initCode, _) = c.init(initPayload(code))
+            initCode should be(200)
+
             val argss = List(
                 JsObject("a" -> JsString("A")),
                 JsObject("i" -> JsNumber(1)))
@@ -119,7 +132,7 @@ class ActionProxyContainerTests extends ActionProxyContainerTestUtils {
         })
     }
 
-    it should "run a new python script" in {
+    it should "run a python script" in {
         val (out, err) = withPythonContainer { c =>
             val code = """
                 |#!/usr/bin/env python
@@ -146,7 +159,7 @@ class ActionProxyContainerTests extends ActionProxyContainerTestUtils {
         })
     }
 
-    it should "run a new perl script" in {
+    it should "run a perl script" in {
         val (out, err) = withPythonContainer { c =>
             val code = """
                 |#!/usr/bin/env perl
