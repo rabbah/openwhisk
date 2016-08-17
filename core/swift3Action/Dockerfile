@@ -1,6 +1,6 @@
 # This Dockerfile is partially based on:
 #   https://github.com/swiftdocker/docker-swift/
-FROM whisk/dockerskeleton
+FROM openwhisk/dockerskeleton
 
 ENV DEBIAN_FRONTEND noninteractive
 

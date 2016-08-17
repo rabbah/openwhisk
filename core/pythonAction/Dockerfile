@@ -1,5 +1,5 @@
 # Dockerfile for python action
-FROM whisk/dockerskeleton
+FROM openwhisk/dockerskeleton
 
 ENV DEBIAN_FRONTEND noninteractive
  
