@@ -358,7 +358,7 @@ class WskBasicTests
             wsk.rule.create(ruleName, trigger = triggerName, action = actionName, update = true, expectedExitCode = CONFLICT)
 
             // now, we disable the rule, so that we can perform the actual update
-            wsk.rule.disableRule(ruleName, 30 seconds);
+            wsk.rule.disableRule(ruleName, 30.seconds);
 
             // finally, we perform the update, and expect success this time
             wsk.rule.create(ruleName, trigger = triggerName, action = actionName, update = true)

@@ -18,6 +18,8 @@ include 'services:zookeeper'
 include 'tools:cli'
 include 'tools:go-cli'
 
+include 'sdk:docker'
+
 include 'tests'
 
 rootProject.name = 'openwhisk'

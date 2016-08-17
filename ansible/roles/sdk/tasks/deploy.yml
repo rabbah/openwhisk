@@ -13,12 +13,11 @@
   register: tmpdir
 
 - name: copy docker sdk to dockerSkeleton in scratch space
-  local_action: copy src="{{ openwhisk_home }}/core/actionProxy/{{ item }}" dest="{{ tmpdir.stdout }}/dockerSkeleton/"
+  local_action: copy src="{{ openwhisk_home }}/sdk/docker/{{ item }}" dest="{{ tmpdir.stdout }}/dockerSkeleton/"
   with_items:
-    - actionproxy.py
     - buildAndPush.sh
     - Dockerfile
-    - example.sh
+    - example.c
     - README.md
 
 - name: fix file permissions

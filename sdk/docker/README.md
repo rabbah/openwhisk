@@ -30,3 +30,5 @@ wsk action invoke dockerSkeletonExample --blocking
 
 The executable file must be located in the `/action` folder.
 The name of the executable must be `/action/exec` and can be any file with executable permissions.
+The sample docker action runs `example.c` by copying and building the source inside the container
+as `/action/exec` (see `Dockerfile` lines 8-9).
