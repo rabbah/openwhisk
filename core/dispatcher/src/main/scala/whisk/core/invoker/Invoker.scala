@@ -76,6 +76,7 @@ import whisk.core.entity.DocId
 import whisk.core.entity.DocInfo
 import whisk.core.entity.DocRevision
 import whisk.core.entity.EntityName
+import whisk.core.entity.Exec
 import whisk.core.entity.LogLimit
 import whisk.core.entity.Namespace
 import whisk.core.entity.NodeJS6Exec
@@ -319,10 +320,6 @@ class Invoker(
     private val LogRetryCount = 15
     private val LogRetry = 100 // millis
     private val LOG_ACTIVATION_SENTINEL = "XXX_THE_END_OF_A_WHISK_ACTIVATION_XXX"
-    private val sentinelledActions = {
-        for (exec <- Seq(NodeJSExec("", None), NodeJS6Exec("", None), PythonExec(""), SwiftExec(""), Swift3Exec("")))
-            yield WhiskAction.containerImageName(exec, config.dockerRegistry, config.dockerImageTag)
-    }.toSet
 
     /**
      * Waits for log cursor to advance. This will retry up to tries times
@@ -339,7 +336,7 @@ class Invoker(
             val rawLogBytes = con.getDockerLogContent(con.lastLogSize, size, runningInContainer)
             val rawLog = new String(rawLogBytes, "UTF-8")
 
-            val (complete, isTruncated, logs) = processJsonDriverLogContents(rawLog, sentinelledActions.contains(con.image), limit)
+            val (complete, isTruncated, logs) = processJsonDriverLogContents(rawLog, Exec.sentinelledLogs(con.image), limit)
 
             if (tries > 0 && !complete && !isTruncated) {
                 info(this, s"log cursor advanced but missing sentinel, trying $tries more times")

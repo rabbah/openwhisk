@@ -250,6 +250,16 @@ class SchemaTests extends FlatSpec with BeforeAndAfter with Matchers {
         assert(execs(3) == JsObject("kind" -> "swift".toJson, "code" -> "swft".toJson).compactPrint)
     }
 
+    it should "indicate which containers support log sentinels" in {
+        Seq("whisk/nodejsaction", "whisk/nodejs6action", "whisk/swiftaction", "whisk/swift3action", "whisk/pythonaction") foreach {
+            i => withClue(s"checking $i") { Exec.sentinelledLogs(i) shouldBe true }
+        }
+
+        Seq("whisk/javasaction", "openwhisk/dockerskeleton", "foo/bar") foreach {
+            i => withClue(s"checking $i") { Exec.sentinelledLogs(i) shouldBe false }
+        }
+    }
+
     behavior of "Parameter"
     it should "properly deserialize and reserialize JSON" in {
         val json = Seq[JsValue](

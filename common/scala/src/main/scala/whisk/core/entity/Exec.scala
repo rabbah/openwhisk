@@ -54,32 +54,32 @@ sealed abstract class Exec(val kind: String) extends ByteSizeable {
 }
 
 protected[core] case class NodeJSExec(code: String, init: Option[String]) extends Exec(Exec.NODEJS) {
-    val image = "whisk/nodejsaction"
+    val image = Exec.imagename(Exec.NODEJS)
     def size = (code sizeInBytes) + init.map(_.sizeInBytes).getOrElse(0 B)
 }
 
 protected[core] case class NodeJS6Exec(code: String, init: Option[String]) extends Exec(Exec.NODEJS6) {
-    val image = "whisk/nodejs6action"
+    val image = Exec.imagename(Exec.NODEJS6)
     def size = (code sizeInBytes) + init.map(_.sizeInBytes).getOrElse(0 B)
 }
 
 protected[core] case class PythonExec(code: String) extends Exec(Exec.PYTHON) {
-    val image = "whisk/pythonaction"
+    val image = Exec.imagename(Exec.PYTHON)
     def size = code sizeInBytes
 }
 
 protected[core] case class SwiftExec(code: String) extends Exec(Exec.SWIFT) {
-    val image = "whisk/swiftaction"
+    val image = Exec.imagename(Exec.SWIFT)
     def size = code sizeInBytes
 }
 
 protected[core] case class Swift3Exec(code: String) extends Exec(Exec.SWIFT3) {
-    val image = "whisk/swift3action"
+    val image = Exec.imagename(Exec.SWIFT3)
     def size = code sizeInBytes
 }
 
 protected[core] case class JavaExec(jar: String, main: String) extends Exec(Exec.JAVA) {
-    val image = "whisk/javaaction"
+    val image = Exec.imagename(Exec.JAVA)
     def size = (jar sizeInBytes) + (main sizeInBytes)
 }
 
@@ -88,7 +88,7 @@ protected[core] case class BlackBoxExec(image: String) extends Exec(Exec.BLACKBO
 }
 
 protected[core] case class SequenceExec(code: String, components: Vector[String]) extends Exec(Exec.SEQUENCE) {
-    val image = "whisk/nodejsaction"
+    val image = Exec.imagename(Exec.NODEJS)
     def size = components.map(_ sizeInBytes).reduce(_ + _)
 }
 
@@ -98,6 +98,9 @@ protected[core] object Exec
     with DefaultRuntimeVersions {
 
     private lazy val b64decoder = Base64.getDecoder()
+
+    // Constructs standard image name for action
+    protected[core] def imagename(name: String, prefix: String = "whisk") = s"$prefix/${name}action".replace(":", "")
 
     // The possible values of the JSON 'kind' field.
     protected[core] val NODEJS = "nodejs"
@@ -109,6 +112,18 @@ protected[core] object Exec
     protected[core] val BLACKBOX = "blackbox"
     protected[core] val SEQUENCE = "sequence"
     protected[core] val runtimes = Set(NODEJS, NODEJS6, PYTHON, SWIFT, SWIFT3, JAVA, BLACKBOX, SEQUENCE)
+
+    /**
+     * Determines if container image is one that supports log sentinels.
+     *
+     * @param iamge name of the container
+     * @return true iff image is one of those know to generate sentinels
+     */
+    protected[core] def sentinelledLogs(image: String) = sentinelledContainers contains image
+
+    // The runtimes that support log sentinels (all but java and blackbox; also exclude sequence since it's not a container image itself)
+    private val sentinelledContainers = (runtimes - JAVA - BLACKBOX - SEQUENCE) map { imagename(_) }
+
     val sizeLimit = 48 MB
 
     protected[core] def js(code: String, init: String = null): Exec = NodeJSExec(trim(code), Option(init).map(_.trim))
