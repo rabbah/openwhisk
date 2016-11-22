@@ -60,7 +60,7 @@ class SequenceApiTests
         val seqName = EntityName(s"${aname()}_toomanyactions")
         // put the component action in the entity store so it's found
         val component = WhiskAction(namespace, aname(), Exec.js("??"))
-        put(entityStore, component)
+        put(component)
         // create exec sequence that will violate max length
         val limit = whiskConfig.actionSequenceLimit.toInt + 1 // one more than allowed
         val sequence = for (i <- 1 to limit) yield stringToFullyQualifiedName(component.docid())
@@ -106,7 +106,7 @@ class SequenceApiTests
 
         // put the action in the entity store so it's found
         val component = WhiskAction(namespace, aname(), Exec.js("??"))
-        put(entityStore, component)
+        put(component)
 
         val seqName = s"${aname()}_cyclic"
         val sSeq = makeSimpleSequence(seqName, namespace, Vector(component.name(), seqName, component.name()), false)
@@ -124,7 +124,7 @@ class SequenceApiTests
         val seqName = EntityName(s"${aname()}_cycle")
         // put the component action in the entity store so it's found
         val component = WhiskAction(namespace, aname(), Exec.js("??"))
-        put(entityStore, component)
+        put(component)
         // create valid exec sequence initially
         val sequence = for (i <- 1 to 2) yield stringToFullyQualifiedName(component.docid())
         val content = WhiskActionPut(Some(Exec.sequence(sequence.toVector)))
@@ -151,7 +151,7 @@ class SequenceApiTests
         val seqName = EntityName(s"${aname()}_normal")
         // put the component action in the entity store so it's found
         val component = WhiskAction(namespace, aname(), Exec.js("??"))
-        put(entityStore, component)
+        put(component)
         // create valid exec sequence
         val limit = whiskConfig.actionSequenceLimit.toInt
         val sequence = for (i <- 1 to limit) yield stringToFullyQualifiedName(component.docid())
@@ -170,18 +170,18 @@ class SequenceApiTests
         // create the package
         val pkg = s"${aname()}_pkg"
         val wp = WhiskPackage(namespace, EntityName(pkg), None, publish = true)
-        put(entityStore, wp)
+        put(wp)
 
         // create binding to wp
         val pkgWithBinding = s"${aname()}_pkgbinding"
         val wpBinding = WhiskPackage(namespace, EntityName(pkgWithBinding), wp.bind)
-        put(entityStore, wpBinding)
+        put(wpBinding)
 
         // put the action in the entity store so it exists
         val actionName = s"${aname()}_action"
         val namespaceWithPkg = s"/$namespace/$pkg"
         val action = WhiskAction(EntityPath(namespaceWithPkg), EntityName(actionName), Exec.js("??"))
-        put(entityStore, action)
+        put(action)
 
         // create sequence that refers to action with binding
         val sequence = Vector(s"/$defaultNamespace/$pkgWithBinding/$actionName").map(stringToFullyQualifiedName(_))
@@ -200,13 +200,13 @@ class SequenceApiTests
 
         // put the action in the entity store so it's found
         val component = WhiskAction(namespace, aname(), Exec.js("??"))
-        put(entityStore, component)
+        put(component)
         val sequence = for (i <- 1 to 2) yield stringToFullyQualifiedName(component.docid())
 
         // create package
         val pkg = s"${aname()}_pkg"
         val wp = WhiskPackage(namespace, EntityName(pkg), None, publish = true)
-        put(entityStore, wp)
+        put(wp)
 
         // create an action sequence
         val namespaceWithPkg = EntityPath(s"/$namespace/$pkg")
@@ -218,7 +218,7 @@ class SequenceApiTests
         // create binding
         val pkgWithBinding = s"${aname()}_pkgbinding"
         val wpBinding = WhiskPackage(namespace, EntityName(pkgWithBinding), wp.bind)
-        put(entityStore, wpBinding)
+        put(wpBinding)
 
         // now update the sequence to refer to itself through the binding
         val seqNameWithBinding = stringToFullyQualifiedName(s"/$namespace/$pkgWithBinding/${seqName.name}")
@@ -383,7 +383,7 @@ class SequenceApiTests
     private def putSimpleSequenceInDB(sequenceName: String, ns: EntityPath, components: Vector[String])(
         implicit tid: TransactionId) = {
         val seqAction = makeSimpleSequence(sequenceName, ns, components)
-        put(entityStore, seqAction)
+        put(seqAction)
     }
 
     /**
@@ -402,7 +402,7 @@ class SequenceApiTests
             // create bogus wsk actions
             val wskActions = componentNames.toSet[String] map { c => WhiskAction(ns, EntityName(c), Exec.js("??")) }
             // add them to the db
-            wskActions.foreach { put(entityStore, _) }
+            wskActions.foreach { put(_) }
         }
         // add namespace to component names
         val components = componentNames map { c => stringToFullyQualifiedName(s"/$ns/$c") }

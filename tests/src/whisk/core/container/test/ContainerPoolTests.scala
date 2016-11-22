@@ -18,6 +18,7 @@ package whisk.core.container.test
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.language.postfixOps
 
 import org.junit.runner.RunWith
 import org.scalatest.BeforeAndAfter
@@ -26,25 +27,23 @@ import org.scalatest.FlatSpec
 import org.scalatest.junit.JUnitRunner
 
 import akka.event.Logging.InfoLevel
+import common.WskActorSystem
 import whisk.common.TransactionId
 import whisk.core.WhiskConfig
 import whisk.core.WhiskConfig.dockerEndpoint
 import whisk.core.WhiskConfig.edgeHostName
-import whisk.core.WhiskConfig.selfDockerEndpoint
 import whisk.core.WhiskConfig.invokerSerializeDockerOp
 import whisk.core.WhiskConfig.invokerSerializeDockerPull
+import whisk.core.WhiskConfig.selfDockerEndpoint
 import whisk.core.container.Container
 import whisk.core.container.ContainerPool
 import whisk.core.entity.AuthKey
 import whisk.core.entity.EntityName
-import whisk.core.entity.Exec
 import whisk.core.entity.EntityPath
+import whisk.core.entity.Exec
 import whisk.core.entity.WhiskAction
 import whisk.core.entity.WhiskAuthStore
 import whisk.core.entity.WhiskEntityStore
-import scala.language.postfixOps
-
-import common.WskActorSystem
 
 /**
  * Unit tests for ContainerPool and, by association, Container and WhiskContainer.
@@ -73,11 +72,8 @@ class ContainerPoolTests extends FlatSpec
     val pool = new ContainerPool(config, 0, InfoLevel, true, true)
     pool.logDir = "/tmp"
 
-    val datastore = WhiskEntityStore.datastore(config)
-
     override def afterAll() {
         println("Shutting down store connections")
-        datastore.shutdown()
         super.afterAll()
     }
 

@@ -219,7 +219,9 @@ class ViewTests extends FlatSpec
             WhiskActivation(namespace2, actionName, Subject(), ActivationId(), start = now, end = now),
             WhiskActivation(namespace2, actionName, Subject(), ActivationId(), start = now, end = now))
 
-        entities foreach { put(datastore, _) }
+        entities foreach {
+            case t: WhiskAction => put(t)
+        }
         waitOnView(datastore, namespace1, entities.length / 2)
         waitOnView(datastore, namespace2, entities.length / 2)
 

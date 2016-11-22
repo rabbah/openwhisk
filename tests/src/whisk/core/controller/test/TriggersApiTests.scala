@@ -65,8 +65,8 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
         val triggers = (1 to 2).map { i =>
             WhiskTrigger(namespace, aname, Parameters("x", "b"))
         }.toList
-        triggers foreach { put(entityStore, _) }
-        waitOnView(entityStore, WhiskTrigger, namespace, 2)
+        triggers foreach { put(_) }
+        waitOnView(triggerStore, WhiskTrigger, namespace, 2)
         Get(s"$collectionPath") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
             val response = responseAs[List[JsObject]]
@@ -95,8 +95,8 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
         val triggers = (1 to 2).map { i =>
             WhiskTrigger(namespace, aname, Parameters("x", "b"))
         }.toList
-        triggers foreach { put(entityStore, _) }
-        waitOnView(entityStore, WhiskTrigger, namespace, 2)
+        triggers foreach { put(_) }
+        waitOnView(triggerStore, WhiskTrigger, namespace, 2)
         Get(s"$collectionPath?docs=true") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
             val response = responseAs[List[WhiskTrigger]]
@@ -109,7 +109,7 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
     it should "get trigger by name in default/explicit namespace" in {
         implicit val tid = transid()
         val trigger = WhiskTrigger(namespace, aname, Parameters("x", "b"))
-        put(entityStore, trigger)
+        put(trigger)
         Get(s"$collectionPath/${trigger.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
             val response = responseAs[WhiskTrigger]
@@ -133,7 +133,7 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
     it should "report Conflict if the name was of a different type" in {
         implicit val tid = transid()
         val rule = WhiskRule(namespace, aname, FullyQualifiedEntityName(namespace, aname), FullyQualifiedEntityName(namespace, aname))
-        put(entityStore, rule)
+        put(rule)
         Get(s"/$namespace/${collection.path}/${rule.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(Conflict)
         }
@@ -143,7 +143,7 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
     it should "delete trigger by name" in {
         implicit val tid = transid()
         val trigger = WhiskTrigger(namespace, aname, Parameters("x", "b"))
-        put(entityStore, trigger)
+        put(trigger)
         Delete(s"$collectionPath/${trigger.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
             val response = responseAs[WhiskTrigger]
@@ -228,7 +228,7 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
             Parameters(key.toString, "a" * 10)
         } reduce (_ ++ _)
         val content = s"""{"parameters":$parameters}""".parseJson.asJsObject
-        put(entityStore, trigger)
+        put(trigger)
         Put(s"$collectionPath/${trigger.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(RequestEntityTooLarge)
             response.entity.toString should include(entityTooBigRejectionMessage)
@@ -239,7 +239,7 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
         implicit val tid = transid()
         val trigger = WhiskTrigger(namespace, aname, Parameters("x", "b"))
         val content = WhiskTriggerPut()
-        put(entityStore, trigger)
+        put(trigger)
         Put(s"$collectionPath/${trigger.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
             deleteTrigger(trigger.docid)
             status should be(OK)
@@ -252,7 +252,7 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
         implicit val tid = transid()
         val trigger = WhiskTrigger(namespace, aname, annotations = Parameters(Parameters.Feed, "xyz"))
         val content = WhiskTriggerPut(annotations = Some(trigger.annotations))
-        put(entityStore, trigger)
+        put(trigger)
         Put(s"$collectionPath/${trigger.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(BadRequest)
         }
@@ -262,7 +262,7 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
         implicit val tid = transid()
         val trigger = WhiskTrigger(namespace, aname)
         val content = WhiskTriggerPut(annotations = Some(Parameters(Parameters.Feed, "xyz")))
-        put(entityStore, trigger)
+        put(trigger)
         Put(s"$collectionPath/${trigger.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(BadRequest)
         }
@@ -273,7 +273,7 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
         implicit val tid = transid()
         val trigger = WhiskTrigger(namespace, aname, Parameters("x", "b"))
         val content = JsObject("xxx" -> "yyy".toJson)
-        put(entityStore, trigger)
+        put(trigger)
         Post(s"$collectionPath/${trigger.name}", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
             val response = responseAs[JsObject]
@@ -282,8 +282,8 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
             response.fields("activationId") should not be None
 
             val activationDoc = DocId(WhiskEntity.qualifiedName(namespace, activationId))
-            val activation = get(activationStore, activationDoc, WhiskActivation, garbageCollect = false)
-            del(entityStore, DocId(WhiskEntity.qualifiedName(namespace, activationId)), WhiskActivation)
+            val activation = get(activationDoc, WhiskActivation, garbageCollect = false)
+            del(DocId(WhiskEntity.qualifiedName(namespace, activationId)), WhiskActivation)
             activation.end should be(Instant.EPOCH)
             activation.response.result should be(Some(content))
         }
@@ -292,12 +292,12 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
     it should "fire a trigger without args" in {
         implicit val tid = transid()
         val trigger = WhiskTrigger(namespace, aname, Parameters("x", "b"))
-        put(entityStore, trigger)
+        put(trigger)
         Post(s"$collectionPath/${trigger.name}") ~> sealRoute(routes(creds)) ~> check {
             val response = responseAs[JsObject]
             val JsString(id) = response.fields("activationId")
             val activationId = ActivationId(id)
-            del(entityStore, DocId(WhiskEntity.qualifiedName(namespace, activationId)), WhiskActivation)
+            del(DocId(WhiskEntity.qualifiedName(namespace, activationId)), WhiskActivation)
             response.fields("activationId") should not be None
         }
     }
@@ -306,7 +306,7 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
     it should "reject invalid resource" in {
         implicit val tid = transid()
         val trigger = WhiskTrigger(namespace, aname)
-        put(entityStore, trigger)
+        put(trigger)
         Get(s"$collectionPath/${trigger.name}/bar") ~> sealRoute(routes(creds)) ~> check {
             status should be(NotFound)
         }
@@ -316,7 +316,7 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
     it should "be able to handle a trigger as of the old schema" in {
         implicit val tid = transid()
         val trigger = OldWhiskTrigger(namespace, aname)
-        put(entityStore, trigger)
+        put(trigger)
         Get(s"$collectionPath/${trigger.name}") ~> sealRoute(routes(creds)) ~> check {
             val response = responseAs[WhiskTrigger]
             status should be(OK)
@@ -328,7 +328,7 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
     it should "report proper error when record is corrupted on delete" in {
         implicit val tid = transid()
         val entity = BadEntity(namespace, aname)
-        put(entityStore, entity)
+        put(entity)
 
         Delete(s"$collectionPath/${entity.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(InternalServerError)
@@ -339,7 +339,7 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
     it should "report proper error when record is corrupted on get" in {
         implicit val tid = transid()
         val entity = BadEntity(namespace, aname)
-        put(entityStore, entity)
+        put(entity)
 
         Get(s"$collectionPath/${entity.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(InternalServerError)
@@ -350,7 +350,7 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
     it should "report proper error when record is corrupted on put" in {
         implicit val tid = transid()
         val entity = BadEntity(namespace, aname)
-        put(entityStore, entity)
+        put(entity)
 
         val content = WhiskTriggerPut()
         Put(s"$collectionPath/${entity.name}", content) ~> sealRoute(routes(creds)) ~> check {

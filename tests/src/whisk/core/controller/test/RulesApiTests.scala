@@ -68,8 +68,8 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val rules = (1 to 2).map { i =>
             WhiskRule(namespace, aname(), afullname(namespace, "bogus trigger"), afullname(namespace, "bogus action"))
         }.toList
-        rules foreach { put(entityStore, _) }
-        waitOnView(entityStore, WhiskRule, namespace, 2)
+        rules foreach { put(_) }
+        waitOnView(ruleStore, WhiskRule, namespace, 2)
         Get(s"$collectionPath") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
             val response = responseAs[List[JsObject]]
@@ -99,8 +99,8 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val rules = (1 to 2).map { i =>
             WhiskRule(namespace, aname(), afullname(namespace, "bogus trigger"), afullname(namespace, "bogus action"))
         }.toList
-        rules foreach { put(entityStore, _) }
-        waitOnView(entityStore, WhiskRule, namespace, 2)
+        rules foreach { put(_) }
+        waitOnView(ruleStore, WhiskRule, namespace, 2)
         Get(s"$collectionPath?docs=true") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
             val response = responseAs[List[WhiskRule]]
@@ -114,7 +114,7 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         implicit val tid = transid()
 
         val rule = WhiskRule(namespace, aname(), afullname(namespace, "bogus trigger"), afullname(namespace, "bogus action"))
-        put(entityStore, rule)
+        put(rule)
         Get(s"$collectionPath/${rule.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
             val response = responseAs[WhiskRuleResponse]
@@ -151,8 +151,8 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
             Map(rule.fullyQualifiedName(false) -> ReducedRule(rule.action, Status.ACTIVE))
         })
 
-        put(entityStore, trigger)
-        put(entityStore, rule)
+        put(trigger)
+        put(rule)
 
         Get(s"$collectionPath/${rule.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
@@ -167,8 +167,8 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val trigger = WhiskTrigger(namespace, EntityName("get_rule_with_empty_trigger trigger"))
         val rule = WhiskRule(namespace, EntityName("get_rule_with_empty_trigger"), trigger.fullyQualifiedName(false), afullname(namespace, "an action"))
 
-        put(entityStore, trigger)
-        put(entityStore, rule)
+        put(trigger)
+        put(rule)
 
         Get(s"$collectionPath/${rule.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
@@ -182,7 +182,7 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
 
         val trigger = WhiskTrigger(namespace, aname())
 
-        put(entityStore, trigger)
+        put(trigger)
 
         Get(s"/$namespace/${collection.path}/${trigger.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(Conflict)
@@ -198,8 +198,8 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
             Map(rule.fullyQualifiedName(false) -> ReducedRule(rule.action, Status.ACTIVE))
         })
 
-        put(entityStore, trigger)
-        put(entityStore, rule)
+        put(trigger)
+        put(rule)
 
         Delete(s"$collectionPath/${rule.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(Conflict)
@@ -216,11 +216,11 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val triggerLink = ReducedRule(rule.action, Status.INACTIVE)
         val trigger = WhiskTrigger(rule.trigger.path, rule.trigger.name, rules = Some(Map(rule.fullyQualifiedName(false) -> triggerLink)))
 
-        put(entityStore, trigger, false)
-        put(entityStore, rule)
+        put(trigger, false)
+        put(rule)
 
         Delete(s"$collectionPath/${rule.name}") ~> sealRoute(routes(creds)) ~> check {
-            val t = get(entityStore, trigger.docid, WhiskTrigger)
+            val t = get(trigger.docid, WhiskTrigger)
             deleteTrigger(t.docid)
 
             status should be(OK)
@@ -235,7 +235,7 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
 
         val rule = WhiskRule(namespace, EntityName("delete_rule_inactive"), afullname(namespace, "a trigger"), afullname(namespace, "an action"))
 
-        put(entityStore, rule)
+        put(rule)
 
         Delete(s"$collectionPath/${rule.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
@@ -250,8 +250,8 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val rule = WhiskRule(namespace, aname(), FullyQualifiedEntityName(namespace, aname()), afullname(namespace, "an action"))
         val trigger = WhiskTrigger(rule.trigger.path, rule.trigger.name)
 
-        put(entityStore, trigger, false)
-        put(entityStore, rule)
+        put(trigger, false)
+        put(rule)
 
         Delete(s"$collectionPath/${rule.name}") ~> sealRoute(routes(creds)) ~> check {
             deleteTrigger(trigger.docid)
@@ -271,11 +271,11 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val action = WhiskAction(rule.action.path, rule.action.name, Exec.js("??"))
         val content = WhiskRulePut(Some(rule.trigger), Some(rule.action))
 
-        put(entityStore, trigger, false)
-        put(entityStore, action)
+        put(trigger, false)
+        put(action)
 
         Put(s"$collectionPath/${rule.name}", content) ~> sealRoute(routes(creds)) ~> check {
-            val t = get(entityStore, trigger.docid, WhiskTrigger)
+            val t = get(trigger.docid, WhiskTrigger)
             deleteTrigger(t.docid)
             deleteRule(rule.docid)
 
@@ -295,12 +295,12 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val rule = WhiskRule(namespace, aname(), trigger.fullyQualifiedName(false), action.fullyQualifiedName(false))
         val content = WhiskRulePut(Some(rule.trigger), Some(rule.action))
 
-        put(entityStore, provider)
-        put(entityStore, trigger, false)
-        put(entityStore, action)
+        put(provider)
+        put(trigger, false)
+        put(action)
 
         Put(s"$collectionPath/${rule.name}", content) ~> sealRoute(routes(creds)) ~> check {
-            val t = get(entityStore, trigger.docid, WhiskTrigger)
+            val t = get(trigger.docid, WhiskTrigger)
             deleteTrigger(t.docid)
             deleteRule(rule.docid)
 
@@ -323,11 +323,11 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         } reduce (_ ++ _)
         val content = s"""{"trigger":"${trigger.name}","action":"${action.name}","annotations":$parameters}""".parseJson.asJsObject
 
-        put(entityStore, trigger, false)
-        put(entityStore, action)
+        put(trigger, false)
+        put(action)
 
         Put(s"$collectionPath/${aname()}", content) ~> sealRoute(routes(creds)) ~> check {
-            val t = get(entityStore, trigger.docid, WhiskTrigger)
+            val t = get(trigger.docid, WhiskTrigger)
             deleteTrigger(t.docid)
 
             status should be(RequestEntityTooLarge)
@@ -348,12 +348,12 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         } reduce (_ ++ _)
         val content = s"""{"trigger":"${trigger.name}","action":"${action.name}","annotations":$parameters}""".parseJson.asJsObject
 
-        put(entityStore, trigger, false)
-        put(entityStore, action)
-        put(entityStore, rule)
+        put(trigger, false)
+        put(action)
+        put(rule)
 
         Put(s"$collectionPath/${rule.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
-            val t = get(entityStore, trigger.docid, WhiskTrigger)
+            val t = get(trigger.docid, WhiskTrigger)
             deleteTrigger(t.docid)
 
             status should be(RequestEntityTooLarge)
@@ -367,7 +367,7 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val trigger = WhiskTrigger(namespace, aname())
         val content = WhiskRulePut(Some(trigger.fullyQualifiedName(false)), Some(afullname(namespace, "bogus action")))
 
-        put(entityStore, trigger)
+        put(trigger)
 
         Put(s"$collectionPath/xxx", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(BadRequest)
@@ -381,7 +381,7 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val action = WhiskAction(namespace, aname(), Exec.js("??"))
         val content = WhiskRulePut(Some(afullname(namespace, "bogus trigger")), Some(action.fullyQualifiedName(false)))
 
-        put(entityStore, action)
+        put(action)
 
         Put(s"$collectionPath/xxx", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(BadRequest)
@@ -408,12 +408,12 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val rule = WhiskRule(namespace, aname(), afullname(namespace, "bogus trigger"), afullname(namespace, "bogus action"))
         val content = WhiskRulePut(Some(trigger.fullyQualifiedName(false)), Some(action.fullyQualifiedName(false)))
 
-        put(entityStore, trigger, false)
-        put(entityStore, action)
-        put(entityStore, rule, false)
+        put(trigger, false)
+        put(action)
+        put(rule, false)
 
         Put(s"$collectionPath/${rule.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
-            val t = get(entityStore, trigger.docid, WhiskTrigger)
+            val t = get(trigger.docid, WhiskTrigger)
             deleteTrigger(t.docid)
             deleteRule(rule.docid)
 
@@ -433,12 +433,12 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val rule = WhiskRule(namespace, aname(), trigger.fullyQualifiedName(false), afullname(namespace, "bogus action"))
         val content = WhiskRulePut(Some(trigger.fullyQualifiedName(false)), Some(action.fullyQualifiedName(false)))
 
-        put(entityStore, trigger, false)
-        put(entityStore, action)
-        put(entityStore, rule, false)
+        put(trigger, false)
+        put(action)
+        put(rule, false)
 
         Put(s"$collectionPath/${rule.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
-            val t = get(entityStore, trigger.docid, WhiskTrigger)
+            val t = get(trigger.docid, WhiskTrigger)
             deleteTrigger(t.docid)
             deleteRule(rule.docid)
 
@@ -457,12 +457,12 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val rule = WhiskRule(namespace, aname(), trigger.fullyQualifiedName(false), afullname(namespace, "bogus action"))
         val content = WhiskRulePut(action = Some(action.fullyQualifiedName(false)))
 
-        put(entityStore, trigger, false)
-        put(entityStore, action)
-        put(entityStore, rule, false)
+        put(trigger, false)
+        put(action)
+        put(rule, false)
 
         Put(s"$collectionPath/${rule.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
-            val t = get(entityStore, trigger.docid, WhiskTrigger)
+            val t = get(trigger.docid, WhiskTrigger)
             deleteTrigger(t.docid)
             deleteRule(rule.docid)
 
@@ -481,12 +481,12 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val rule = WhiskRule(namespace, aname(), trigger.fullyQualifiedName(false), action.fullyQualifiedName(false))
         val content = WhiskRulePut(trigger = Some(trigger.fullyQualifiedName(false)))
 
-        put(entityStore, trigger, false)
-        put(entityStore, action)
-        put(entityStore, rule, false)
+        put(trigger, false)
+        put(action)
+        put(rule, false)
 
         Put(s"$collectionPath/${rule.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
-            val t = get(entityStore, trigger.docid, WhiskTrigger)
+            val t = get(trigger.docid, WhiskTrigger)
             deleteTrigger(t.docid)
             deleteRule(rule.docid)
 
@@ -504,9 +504,9 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val rule = WhiskRule(namespace, aname(), trigger.fullyQualifiedName(false), action.fullyQualifiedName(false))
         val content = WhiskRulePut(None, None, None, None, None)
 
-        put(entityStore, trigger, false)
-        put(entityStore, action)
-        put(entityStore, rule, false)
+        put(trigger, false)
+        put(action)
+        put(rule, false)
 
         Put(s"$collectionPath/${rule.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
             deleteTrigger(trigger.docid)
@@ -525,8 +525,8 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val rule = WhiskRule(namespace, aname(), afullname(namespace, "bogus trigger"), action.fullyQualifiedName(false))
         val content = WhiskRulePut(action = Some(action.fullyQualifiedName(false)))
 
-        put(entityStore, action)
-        put(entityStore, rule)
+        put(action)
+        put(rule)
 
         Put(s"$collectionPath/${rule.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(BadRequest)
@@ -541,8 +541,8 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val rule = WhiskRule(namespace, aname(), trigger.fullyQualifiedName(false), afullname(namespace, "bogus action"))
         val content = WhiskRulePut(trigger = Some(trigger.fullyQualifiedName(false)))
 
-        put(entityStore, trigger)
-        put(entityStore, rule)
+        put(trigger)
+        put(rule)
 
         Put(s"$collectionPath/${rule.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(BadRequest)
@@ -555,7 +555,7 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val rule = WhiskRule(namespace, aname(), afullname(namespace, "bogus trigger"), afullname(namespace, "bogus action"))
         val content = WhiskRulePut(None, None, None, None, None)
 
-        put(entityStore, rule)
+        put(rule)
 
         Put(s"$collectionPath/${rule.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(BadRequest)
@@ -575,8 +575,8 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         })
         val content = WhiskRulePut(publish = Some(!rule.publish))
 
-        put(entityStore, trigger)
-        put(entityStore, rule)
+        put(trigger)
+        put(rule)
 
         Put(s"$collectionPath/${rule.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(Conflict)
@@ -589,7 +589,7 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
 
         val rule = WhiskRule(namespace, aname(), afullname(namespace, "a trigger"), afullname(namespace, "an action"))
 
-        put(entityStore, rule)
+        put(rule)
 
         Post(s"$collectionPath/${rule.name}", inactiveStatus) ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
@@ -604,8 +604,8 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
             Map(rule.fullyQualifiedName(false) -> ReducedRule(rule.action, Status.ACTIVE))
         })
 
-        put(entityStore, trigger)
-        put(entityStore, rule)
+        put(trigger)
+        put(rule)
 
         Post(s"$collectionPath/${rule.name}", activeStatus) ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
@@ -638,11 +638,11 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
             Map(rule.fullyQualifiedName(false) -> ReducedRule(rule.action, Status.INACTIVE))
         })
 
-        put(entityStore, trigger, false)
-        put(entityStore, rule)
+        put(trigger, false)
+        put(rule)
 
         Post(s"$collectionPath/${rule.name}", activeStatus) ~> sealRoute(routes(creds)) ~> check {
-            val t = get(entityStore, trigger.docid, WhiskTrigger)
+            val t = get(trigger.docid, WhiskTrigger)
             deleteTrigger(t.docid)
 
             status should be(OK)
@@ -657,11 +657,11 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val rule = WhiskRule(namespace, aname(), afullname(namespace, aname().name), afullname(namespace, "an action"))
         val trigger = WhiskTrigger(namespace, rule.trigger.name)
 
-        put(entityStore, trigger, false)
-        put(entityStore, rule)
+        put(trigger, false)
+        put(rule)
 
         Post(s"$collectionPath/${rule.name}", activeStatus) ~> sealRoute(routes(creds)) ~> check {
-            val t = get(entityStore, trigger.docid, WhiskTrigger)
+            val t = get(trigger.docid, WhiskTrigger)
             deleteTrigger(t.docid)
 
             status should be(OK)
@@ -674,7 +674,7 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
 
         val rule = WhiskRule(namespace, aname(), afullname(namespace, aname().name), afullname(namespace, "an action"))
 
-        put(entityStore, rule)
+        put(rule)
 
         Post(s"$collectionPath/${rule.name}", activeStatus) ~> sealRoute(routes(creds)) ~> check {
             status should be(NotFound)
@@ -689,11 +689,11 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
             Map(rule.fullyQualifiedName(false) -> ReducedRule(rule.action, Status.ACTIVE))
         })
 
-        put(entityStore, trigger, false)
-        put(entityStore, rule)
+        put(trigger, false)
+        put(rule)
 
         Post(s"$collectionPath/${rule.name}", inactiveStatus) ~> sealRoute(routes(creds)) ~> check {
-            val t = get(entityStore, trigger.docid, WhiskTrigger)
+            val t = get(trigger.docid, WhiskTrigger)
             deleteTrigger(t.docid)
 
             status should be(OK)
@@ -707,7 +707,7 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
 
         val rule = WhiskRule(namespace, aname(), afullname(namespace, "a trigger"), afullname(namespace, "an action"))
 
-        put(entityStore, rule)
+        put(rule)
 
         Get(s"$collectionPath/${rule.name}/bar") ~> sealRoute(routes(creds)) ~> check {
             status should be(NotFound)
@@ -720,7 +720,7 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
 
         val rule = OldWhiskRule(namespace, aname(), EntityName("a trigger"), EntityName("an action"), Status.ACTIVE)
 
-        put(entityStore, rule)
+        put(rule)
 
         Get(s"$collectionPath/${rule.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
@@ -738,11 +738,11 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val action = WhiskAction(namespace, rule.action.name, Exec.js("??"))
         val content = WhiskRulePut(Some(rule.trigger), Some(rule.action))
 
-        put(entityStore, trigger, false)
-        put(entityStore, action)
+        put(trigger, false)
+        put(action)
 
         Put(s"$collectionPath/${rule.name}", content) ~> sealRoute(routes(creds)) ~> check {
-            val t = get(entityStore, trigger.docid, WhiskTrigger)
+            val t = get(trigger.docid, WhiskTrigger)
             deleteTrigger(t.docid)
             deleteRule(rule.docid)
 
@@ -762,11 +762,11 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val rule = OldWhiskRule(namespace, ruleNameQualified.name, triggerName, actionName.name, Status.ACTIVE)
         val trigger = WhiskTrigger(namespace, triggerName, rules = Some(Map(ruleNameQualified -> ReducedRule(actionName, Status.INACTIVE))))
 
-        put(entityStore, trigger, false)
-        put(entityStore, rule)
+        put(trigger, false)
+        put(rule)
 
         Post(s"$collectionPath/${rule.name}", activeStatus) ~> sealRoute(routes(creds)) ~> check {
-            val t = get(entityStore, trigger.docid, WhiskTrigger)
+            val t = get(ruleStore, trigger.docid, WhiskTrigger)
             deleteTrigger(t.docid)
 
             status should be(OK)
@@ -778,7 +778,7 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
     it should "report proper error when record is corrupted on delete" in {
         implicit val tid = transid()
         val entity = BadEntity(namespace, aname())
-        put(entityStore, entity)
+        put(entity)
 
         Delete(s"$collectionPath/${entity.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(InternalServerError)
@@ -789,7 +789,7 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
     it should "report proper error when record is corrupted on get" in {
         implicit val tid = transid()
         val entity = BadEntity(namespace, aname())
-        put(entityStore, entity)
+        put(entity)
 
         Get(s"$collectionPath/${entity.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(InternalServerError)
@@ -800,7 +800,7 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
     it should "report proper error when record is corrupted on put" in {
         implicit val tid = transid()
         val entity = BadEntity(namespace, aname())
-        put(entityStore, entity)
+        put(entity)
 
         val content = WhiskRulePut()
         Put(s"$collectionPath/${entity.name}", content) ~> sealRoute(routes(creds)) ~> check {
@@ -821,10 +821,10 @@ class RulesApiTests extends ControllerTestCommon with WhiskRulesApi {
         val contentb = WhiskRulePut(Some(trigger.fullyQualifiedName(false)), Some(aentity.fullyQualifiedName(false)))
         val contentc = WhiskRulePut(Some(tentity.fullyQualifiedName(false)), Some(action.fullyQualifiedName(false)))
 
-        put(entityStore, tentity)
-        put(entityStore, aentity)
-        put(entityStore, trigger)
-        put(entityStore, action)
+        put(tentity)
+        put(aentity)
+        put(trigger)
+        put(action)
 
         Put(s"$collectionPath/${aname()}", contenta) ~> sealRoute(routes(creds)) ~> check {
             status should be(BadRequest)

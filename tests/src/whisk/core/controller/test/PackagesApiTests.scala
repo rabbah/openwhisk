@@ -70,8 +70,8 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
                 WhiskPackage(namespace, aname, binding)
             }
         }.toList
-        providers foreach { put(entityStore, _) }
-        waitOnView(entityStore, WhiskPackage, namespace, providers.length)
+        providers foreach { put(_) }
+        waitOnView(WhiskPackage, namespace, providers.length)
         whisk.utils.retry {
             Get(s"$collectionPath") ~> sealRoute(routes(creds)) ~> check {
                 status should be(OK)
@@ -101,10 +101,10 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
             WhiskPackage(namespaces(0), aname, providers(0).bind, publish = false),
             WhiskPackage(namespaces(0), aname, providers(1).bind, publish = true),
             WhiskPackage(namespaces(0), aname, providers(1).bind, publish = false))
-        (providers ++ references) foreach { put(entityStore, _) }
-        waitOnView(entityStore, WhiskPackage, namespaces(1), 1)
-        waitOnView(entityStore, WhiskPackage, namespaces(2), 1)
-        waitOnView(entityStore, WhiskPackage, namespaces(0), 1 + 4)
+        (providers ++ references) foreach { put(_) }
+        waitOnView(WhiskPackage, namespaces(1), 1)
+        waitOnView(WhiskPackage, namespaces(2), 1)
+        waitOnView(WhiskPackage, namespaces(0), 1 + 4)
         Get(s"$collectionPath") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
             val response = responseAs[List[JsObject]]
@@ -140,10 +140,10 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
             WhiskPackage(namespaces(0), aname, providers(0).bind, publish = false),
             WhiskPackage(namespaces(0), aname, providers(1).bind, publish = true),
             WhiskPackage(namespaces(0), aname, providers(1).bind, publish = false))
-        (providers ++ references) foreach { put(entityStore, _) }
-        waitOnView(entityStore, WhiskPackage, namespaces(1), 1)
-        waitOnView(entityStore, WhiskPackage, namespaces(2), 1)
-        waitOnView(entityStore, WhiskPackage, namespaces(0), 1 + 4)
+        (providers ++ references) foreach { put(_) }
+        waitOnView(WhiskPackage, namespaces(1), 1)
+        waitOnView(WhiskPackage, namespaces(2), 1)
+        waitOnView(WhiskPackage, namespaces(0), 1 + 4)
         Get(s"$collectionPath?public=true") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
             val response = responseAs[List[JsObject]]
@@ -163,10 +163,10 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
             WhiskPackage(namespaces(0), pkgname, None, publish = false),
             WhiskPackage(namespaces(1), pkgname, None, publish = true),
             WhiskPackage(namespaces(2), pkgname, None, publish = true))
-        providers foreach { put(entityStore, _) }
-        waitOnView(entityStore, WhiskPackage, namespaces(0), 1)
-        waitOnView(entityStore, WhiskPackage, namespaces(1), 1)
-        waitOnView(entityStore, WhiskPackage, namespaces(2), 1)
+        providers foreach { put(_) }
+        waitOnView(WhiskPackage, namespaces(0), 1)
+        waitOnView(WhiskPackage, namespaces(1), 1)
+        waitOnView(WhiskPackage, namespaces(2), 1)
         Get(s"$collectionPath?public=true") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
             val response = responseAs[List[JsObject]]
@@ -188,10 +188,10 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
                 WhiskPackage(namespaces(0), pkgname, None, publish = true),
                 WhiskPackage(namespaces(1), pkgname, None, publish = true),
                 WhiskPackage(namespaces(2), pkgname, None, publish = true))
-            providers foreach { put(entityStore, _) }
-            waitOnView(entityStore, WhiskPackage, namespaces(0), 1)
-            waitOnView(entityStore, WhiskPackage, namespaces(1), 1)
-            waitOnView(entityStore, WhiskPackage, namespaces(2), 1)
+            providers foreach { put(_) }
+            waitOnView(WhiskPackage, namespaces(0), 1)
+            waitOnView(WhiskPackage, namespaces(1), 1)
+            waitOnView(WhiskPackage, namespaces(2), 1)
             Get(s"$collectionPath?public=true") ~> sealRoute(routes(creds)) ~> check {
                 status should be(OK)
                 val response = responseAs[List[JsObject]]
@@ -214,7 +214,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
     it should "get package" in {
         implicit val tid = transid()
         val provider = WhiskPackage(namespace, aname, None)
-        put(entityStore, provider)
+        put(provider)
         Get(s"$collectionPath/${provider.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
             val response = responseAs[WhiskPackageWithActions]
@@ -232,8 +232,8 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         implicit val tid = transid()
         val provider = WhiskPackage(namespace, aname, None, Parameters("a", "A") ++ Parameters("b", "B"))
         val reference = WhiskPackage(namespace, aname, provider.bind, Parameters("b", "b") ++ Parameters("c", "C"))
-        put(entityStore, provider)
-        put(entityStore, reference)
+        put(provider)
+        put(reference)
         Get(s"$collectionPath/${reference.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(OK)
             val response = responseAs[WhiskPackageWithActions]
@@ -250,8 +250,8 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
 
         val provider = WhiskPackage(privateNamespace, aname)
         val reference = WhiskPackage(namespace, aname, provider.bind)
-        put(entityStore, provider)
-        put(entityStore, reference)
+        put(provider)
+        put(reference)
         Get(s"$collectionPath/${reference.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(Forbidden)
         }
@@ -262,9 +262,9 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         val provider = WhiskPackage(namespace, aname)
         val action = WhiskAction(provider.namespace.addpath(provider.name), aname, Exec.js("??"))
         val feed = WhiskAction(provider.namespace.addpath(provider.name), aname, Exec.js("??"), annotations = Parameters(Parameters.Feed, "true"))
-        put(entityStore, provider)
-        put(entityStore, action)
-        put(entityStore, feed)
+        put(provider)
+        put(action)
+        put(feed)
 
         // it should "reject get private package from other subject" in {
         val auser = WhiskAuth(Subject(), AuthKey()).toIdentity
@@ -285,10 +285,10 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         val reference = WhiskPackage(namespace, aname, provider.bind)
         val action = WhiskAction(provider.namespace.addpath(provider.name), aname, Exec.js("??"))
         val feed = WhiskAction(provider.namespace.addpath(provider.name), aname, Exec.js("??"), annotations = Parameters(Parameters.Feed, "true"))
-        put(entityStore, provider)
-        put(entityStore, reference)
-        put(entityStore, action)
-        put(entityStore, feed)
+        put(provider)
+        put(reference)
+        put(action)
+        put(feed)
 
         // it should "reject get package reference from other subject" in {
         val auser = WhiskAuth(Subject(), AuthKey()).toIdentity
@@ -311,10 +311,10 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         val reference = WhiskPackage(namespace, aname, provider.bind)
         val action = WhiskAction(provider.namespace.addpath(provider.name), aname, Exec.js("??"))
         val feed = WhiskAction(provider.namespace.addpath(provider.name), aname, Exec.js("??"), annotations = Parameters(Parameters.Feed, "true"))
-        put(entityStore, provider)
-        put(entityStore, reference)
-        put(entityStore, action)
-        put(entityStore, feed)
+        put(provider)
+        put(reference)
+        put(action)
+        put(feed)
 
         // it should "reject get package reference from other subject" in {
         val auser = WhiskAuth(Subject(), AuthKey()).toIdentity
@@ -349,7 +349,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         // binding annotation should be removed and set by controller
         val someBindingAnnotation = Parameters(WhiskPackage.bindingFieldName, "???")
         val content = WhiskPackagePut(reference.binding, annotations = Some(someBindingAnnotation ++ Parameters("a", "b")))
-        put(entityStore, provider)
+        put(provider)
 
         // it should "reject create package reference in some other namespace" in {
         val auser = WhiskAuth(Subject(), AuthKey()).toIdentity
@@ -374,7 +374,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         val reference = WhiskPackage(namespace, aname, provider.bind)
         // binding annotation should be removed and set by controller
         val content = WhiskPackagePut(reference.binding)
-        put(entityStore, provider)
+        put(provider)
 
         Put(s"/$namespace/${collection.path}/${reference.name}", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(Forbidden)
@@ -386,7 +386,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         val provider = WhiskPackage(namespace, aname)
         val reference = WhiskPackage(namespace, aname, Some(Binding(EntityPath.DEFAULT, provider.name)))
         val content = WhiskPackagePut(reference.binding)
-        put(entityStore, provider)
+        put(provider)
         Put(s"$collectionPath/${reference.name}", content) ~> sealRoute(routes(creds)) ~> check {
             deletePackage(reference.docid)
             status should be(OK)
@@ -425,8 +425,8 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         val provider = WhiskPackage(namespace, aname)
         val reference = WhiskPackage(namespace, aname, provider.bind)
         val content = WhiskPackagePut(Some(Binding(reference.namespace, reference.name)))
-        put(entityStore, provider)
-        put(entityStore, reference)
+        put(provider)
+        put(reference)
         Put(s"$collectionPath/$aname", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(BadRequest)
             responseAs[ErrorResponse].error should include(Messages.bindingCannotReferenceBinding)
@@ -467,7 +467,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         } reduce (_ ++ _)
         val provider = WhiskPackage(namespace, aname)
         val content = s"""{"parameters":$parameters}""".parseJson.asJsObject
-        put(entityStore, provider)
+        put(provider)
         Put(s"$collectionPath/${aname}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(RequestEntityTooLarge)
             response.entity.toString should include(entityTooBigRejectionMessage)
@@ -478,7 +478,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         implicit val tid = transid()
         val provider = WhiskPackage(namespace, aname)
         val content = WhiskPackagePut(publish = Some(true))
-        put(entityStore, provider)
+        put(provider)
 
         // it should "reject update package owned by different user" in {
         val auser = WhiskAuth(Subject(), AuthKey()).toIdentity
@@ -500,8 +500,8 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         // create a bogus binding annotation which should be replaced by the PUT
         val someBindingAnnotation = Some(Parameters(WhiskPackage.bindingFieldName, "???") ++ Parameters("a", "b"))
         val content = WhiskPackagePut(publish = Some(true), annotations = someBindingAnnotation)
-        put(entityStore, provider)
-        put(entityStore, reference)
+        put(provider)
+        put(reference)
 
         // it should "reject update package reference owned by different user"
         val auser = WhiskAuth(Subject(), AuthKey()).toIdentity
@@ -527,7 +527,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         implicit val tid = transid()
         val provider = WhiskPackage(namespace, aname)
         val content = WhiskPackagePut(provider.bind)
-        put(entityStore, provider)
+        put(provider)
         Put(s"$collectionPath/${provider.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(Conflict)
             responseAs[ErrorResponse].error should include(Messages.packageCannotBecomeBinding)
@@ -539,7 +539,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         val provider = WhiskPackage(namespace, aname)
         val reference = WhiskPackage(namespace, aname, provider.bind)
         val content = WhiskPackagePut(reference.binding)
-        put(entityStore, reference)
+        put(reference)
         Put(s"$collectionPath/${reference.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(BadRequest)
             responseAs[ErrorResponse].error should include(Messages.bindingDoesNotExist)
@@ -554,7 +554,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         val provider = WhiskPackage(privateNamespace, aname)
         val reference = WhiskPackage(namespace, aname, provider.bind)
         val content = WhiskPackagePut(reference.binding)
-        put(entityStore, reference)
+        put(reference)
         Put(s"$collectionPath/${reference.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(Forbidden)
         }
@@ -568,8 +568,8 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         val provider = WhiskPackage(privateNamespace, aname)
         val reference = WhiskPackage(namespace, aname, provider.bind)
         val content = WhiskPackagePut(reference.binding)
-        put(entityStore, provider)
-        put(entityStore, reference)
+        put(provider)
+        put(reference)
         Put(s"$collectionPath/${reference.name}?overwrite=true", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(Forbidden)
         }
@@ -579,7 +579,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
     it should "delete package" in {
         implicit val tid = transid()
         val provider = WhiskPackage(namespace, aname)
-        put(entityStore, provider)
+        put(provider)
 
         // it should "reject deleting package owned by different user" in {
         val auser = WhiskAuth(Subject(), AuthKey()).toIdentity
@@ -598,7 +598,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         implicit val tid = transid()
         val provider = WhiskPackage(namespace, aname)
         val reference = WhiskPackage(namespace, aname, provider.bind)
-        put(entityStore, reference)
+        put(reference)
 
         // it should "reject deleting package reference owned by different user" in {
         val auser = WhiskAuth(Subject(), AuthKey()).toIdentity
@@ -617,8 +617,8 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         implicit val tid = transid()
         val provider = WhiskPackage(namespace, aname)
         val action = WhiskAction(provider.namespace.addpath(provider.name), aname, Exec.js("??"))
-        put(entityStore, provider)
-        put(entityStore, action)
+        put(provider)
+        put(action)
         whisk.utils.retry {
             Get(s"$collectionPath/${provider.name}") ~> sealRoute(routes(creds)) ~> check {
                 status should be(OK)
@@ -639,7 +639,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
     it should "reject invalid resource" in {
         implicit val tid = transid()
         val provider = WhiskPackage(namespace, aname)
-        put(entityStore, provider)
+        put(provider)
         Get(s"$collectionPath/${provider.name}/bar") ~> sealRoute(routes(creds)) ~> check {
             status should be(NotFound)
         }
@@ -651,7 +651,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
         val reference = WhiskPackage(namespace, aname, Some(Binding(action.namespace, action.name)))
         val content = WhiskPackagePut(reference.binding)
 
-        put(entityStore, action)
+        put(action)
 
         Put(s"$collectionPath/${reference.name}", content) ~> sealRoute(routes(creds)) ~> check {
             status should be(Conflict)
@@ -662,7 +662,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
     it should "report proper error when record is corrupted on delete" in {
         implicit val tid = transid()
         val entity = BadEntity(namespace, aname)
-        put(entityStore, entity)
+        put(entity)
 
         Delete(s"$collectionPath/${entity.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(InternalServerError)
@@ -673,7 +673,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
     it should "report proper error when record is corrupted on get" in {
         implicit val tid = transid()
         val entity = BadEntity(namespace, aname)
-        put(entityStore, entity)
+        put(entity)
 
         Get(s"$collectionPath/${entity.name}") ~> sealRoute(routes(creds)) ~> check {
             status should be(InternalServerError)
@@ -683,7 +683,7 @@ class PackagesApiTests extends ControllerTestCommon with WhiskPackagesApi {
     it should "report proper error when record is corrupted on put" in {
         implicit val tid = transid()
         val entity = BadEntity(namespace, aname)
-        put(entityStore, entity)
+        put(entity)
 
         val content = WhiskPackagePut()
         Put(s"$collectionPath/${entity.name}", content) ~> sealRoute(routes(creds)) ~> check {

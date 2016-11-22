@@ -77,9 +77,13 @@ protected trait ControllerTestCommon
 
     override val consulServer = "???"
 
-    val entityStore = WhiskEntityStore.datastore(whiskConfig)
-    val activationStore = WhiskActivationStore.datastore(whiskConfig)
-    val authStore = WhiskAuthStore.datastore(whiskConfig)
+    val entityStore = WhiskEntityStore.allDatastores(whiskConfig)
+    implicit val actionStore = WhiskAction.datastore(whiskConfig)
+    implicit val triggerStore = WhiskTrigger.datastore(whiskConfig)
+    implicit val ruleStore = WhiskRule.datastore(whiskConfig)
+    implicit val packageStore = WhiskPackage.datastore(whiskConfig)
+    implicit val activationStore = WhiskActivation.datastore(whiskConfig)
+    implicit val authStore = WhiskAuthStore.datastore(whiskConfig)
 
     def createTempCredentials(implicit transid: TransactionId) = {
         val auth = WhiskAuth(Subject(), AuthKey())
@@ -89,30 +93,30 @@ protected trait ControllerTestCommon
     }
 
     def deleteAction(doc: DocId)(implicit transid: TransactionId) = {
-        Await.result(WhiskAction.get(entityStore, doc) flatMap { doc =>
+        Await.result(WhiskAction.get(actionStore, doc) flatMap { doc =>
             info(this, s"deleting ${doc.docinfo}")
-            WhiskAction.del(entityStore, doc.docinfo)
+            WhiskAction.del(actionStore, doc.docinfo)
         }, dbOpTimeout)
     }
 
     def deleteActivation(doc: DocId)(implicit transid: TransactionId) = {
-        Await.result(WhiskActivation.get(entityStore, doc) flatMap { doc =>
+        Await.result(WhiskActivation.get(activationStore, doc) flatMap { doc =>
             info(this, s"deleting ${doc.docinfo}")
-            WhiskActivation.del(entityStore, doc.docinfo)
+            WhiskActivation.del(activationStore, doc.docinfo)
         }, dbOpTimeout)
     }
 
     def deleteTrigger(doc: DocId)(implicit transid: TransactionId) = {
-        Await.result(WhiskTrigger.get(entityStore, doc) flatMap { doc =>
+        Await.result(WhiskTrigger.get(triggerStore, doc) flatMap { doc =>
             info(this, s"deleting ${doc.docinfo}")
-            WhiskAction.del(entityStore, doc.docinfo)
+            WhiskTrigger.del(triggerStore, doc.docinfo)
         }, dbOpTimeout)
     }
 
     def deleteRule(doc: DocId)(implicit transid: TransactionId) = {
-        Await.result(WhiskRule.get(entityStore, doc) flatMap { doc =>
+        Await.result(WhiskRule.get(ruleStore, doc) flatMap { doc =>
             info(this, s"deleting ${doc.docinfo}")
-            WhiskRule.del(entityStore, doc.docinfo)
+            WhiskRule.del(ruleStore, doc.docinfo)
         }, dbOpTimeout)
     }
 
@@ -124,9 +128,9 @@ protected trait ControllerTestCommon
     }
 
     def deletePackage(doc: DocId)(implicit transid: TransactionId) = {
-        Await.result(WhiskPackage.get(entityStore, doc) flatMap { doc =>
+        Await.result(WhiskPackage.get(packageStore, doc) flatMap { doc =>
             info(this, s"deleting ${doc.docinfo}")
-            WhiskPackage.del(entityStore, doc.docinfo)
+            WhiskPackage.del(packageStore, doc.docinfo)
         }, dbOpTimeout)
     }
 
@@ -142,8 +146,7 @@ protected trait ControllerTestCommon
 
     setVerbosity(InfoLevel)
     Collection.initialize(entityStore, InfoLevel)
-    entityStore.setVerbosity(InfoLevel)
-    activationStore.setVerbosity(InfoLevel)
+    entityStore.values.map(_.setVerbosity(InfoLevel))
     authStore.setVerbosity(InfoLevel)
     entitlementProvider.setVerbosity(InfoLevel)
 
@@ -160,8 +163,7 @@ protected trait ControllerTestCommon
 
     override def afterAll() {
         println("Shutting down cloudant connections");
-        entityStore.shutdown()
-        activationStore.shutdown()
+        entityStore.values.map(_.shutdown())
         authStore.shutdown()
     }
 

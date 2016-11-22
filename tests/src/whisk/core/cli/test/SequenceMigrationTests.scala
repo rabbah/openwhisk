@@ -15,7 +15,6 @@
  */
 package whisk.core.cli.test
 
-
 import java.util.Date
 import scala.concurrent.duration.DurationInt
 import org.junit.runner.RunWith
@@ -56,7 +55,7 @@ class SequenceMigrationTests
     val wsk = new Wsk
     val whiskConfig = new WhiskConfig(WhiskEntityStore.requiredProperties)
     // handle on the entity datastore
-    val entityStore = WhiskEntityStore.datastore(whiskConfig)
+    val entityStore = WhiskAction.datastore(whiskConfig)
     val user = WskAdmin.getUser(wskprops.authKey)
     val allowedActionDuration = 120 seconds
 
@@ -67,7 +66,7 @@ class SequenceMigrationTests
             // create entities to insert in the entity store
             val echo = "echo.json"
             val wc = "word_count.json"
-            val seq_echo_wc = "seq_echo_word_count.json"   // old-style sequence
+            val seq_echo_wc = "seq_echo_word_count.json" // old-style sequence
             val entities = Seq(echo, wc, seq_echo_wc)
             implicit val tid = transid() // needed for put db below
             for (entity <- entities) {
@@ -93,6 +92,6 @@ class SequenceMigrationTests
     }
 
     after {
-        cleanup()  // cleanup entities from db
+        cleanup() // cleanup entities from db
     }
 }
