@@ -18,17 +18,21 @@ package whisk.core.container
 
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.util.concurrent.locks.ReentrantLock
 import java.util.Timer
 import java.util.TimerTask
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.locks.ReentrantLock
+
+import scala.annotation.tailrec
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable.ListBuffer
-import scala.concurrent.duration._
 import scala.concurrent.Future
-import scala.annotation.tailrec
+import scala.concurrent.duration._
 import scala.util.{ Try, Success, Failure }
+
 import akka.actor.ActorSystem
+import akka.event.Logging.InfoLevel
+import akka.event.Logging.LogLevel
 import whisk.common.Counter
 import whisk.common.Logging
 import whisk.common.Scheduler
@@ -37,16 +41,12 @@ import whisk.common.TransactionId
 import whisk.core.WhiskConfig
 import whisk.core.WhiskConfig._
 import whisk.core.entity.ActionLimits
-import whisk.core.entity.MemoryLimit
+import whisk.core.entity.AuthKey
 import whisk.core.entity.LogLimit
+import whisk.core.entity.MemoryLimit
+import whisk.core.entity.NodeJS6Exec
 import whisk.core.entity.TimeLimit
 import whisk.core.entity.WhiskAction
-import whisk.core.entity.WhiskAuthStore
-import whisk.core.entity.WhiskEntityStore
-import whisk.core.entity.NodeJS6Exec
-import akka.event.Logging.LogLevel
-import akka.event.Logging.InfoLevel
-import whisk.core.entity.AuthKey
 
 /**
  * A thread-safe container pool that internalizes container creation/teardown and allows users
@@ -67,9 +67,6 @@ class ContainerPool(
 
     implicit val executionContext = actorSystem.dispatcher
 
-    // These must be defined before verbosity is set
-    private val datastore = WhiskEntityStore.datastore(config)
-    private val authStore = WhiskAuthStore.datastore(config)
     setVerbosity(verbosity)
 
     val mounted = !standalone
@@ -80,15 +77,6 @@ class ContainerPool(
 
     // Eventually, we will have a more sophisticated warmup strategy that does multiple sizes
     private val defaultMemoryLimit = MemoryLimit(MemoryLimit.STD_MEMORY)
-
-    /**
-     * Sets verbosity of this and owned objects.
-     */
-    override def setVerbosity(level: LogLevel) = {
-        super.setVerbosity(level)
-        datastore.setVerbosity(level)
-        authStore.setVerbosity(level)
-    }
 
     /**
      * Enables GC.

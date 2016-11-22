@@ -39,6 +39,7 @@ import whisk.core.WhiskConfig
 import whisk.core.WhiskConfig.{ consulServer, dockerImagePrefix, dockerRegistry, edgeHost, kafkaHost, logsDir, servicePort, whiskVersion }
 import whisk.core.connector.{ ActivationMessage, CompletionMessage }
 import whisk.core.container.{ BlackBoxContainerError, ContainerPool, Interval, RunResult, WhiskContainer, WhiskContainerError }
+import whisk.core.database.ArtifactReader
 import whisk.core.dispatcher.{ Dispatcher, MessageHandler }
 import whisk.core.dispatcher.ActivationFeed.{ ActivationNotification, ContainerReleased, FailedActivation }
 import whisk.core.entity._
@@ -72,8 +73,8 @@ class Invoker(
     override def setVerbosity(level: LogLevel) = {
         super.setVerbosity(level)
         pool.setVerbosity(level)
-        entityStore.setVerbosity(level)
         authStore.setVerbosity(level)
+        actionStore.setVerbosity(level)
         activationStore.setVerbosity(level)
         producer.setVerbosity(level)
     }
@@ -108,7 +109,7 @@ class Invoker(
         // caching is enabled since actions have revision id and an updated
         // action will not hit in the cache due to change in the revision id;
         // if the doc revision is missing, then bypass cache
-        WhiskAction.get(entityStore, actionid.id, actionid.rev, fromCache = actionid.rev != DocRevision()) onComplete {
+        WhiskAction.get(actionStore, actionid.id, actionid.rev, fromCache = actionid.rev != DocRevision()) onComplete {
             case Success(action) =>
                 invokeAction(tran, action) onComplete {
                     case Success(activation) =>
@@ -452,9 +453,10 @@ class Invoker(
         }
     }
 
-    private val entityStore = WhiskEntityStore.datastore(config)
     private val authStore = WhiskAuthStore.datastore(config)
-    private val activationStore = WhiskActivationStore.datastore(config)
+    private val entityStore = WhiskEntityStore.allDatastores(config)
+    private val actionStore: ArtifactReader[WhiskAction] = WhiskEntityStore.getStore[WhiskAction](entityStore, WhiskAction.collectionName)
+    private val activationStore = WhiskEntityStore.getStore[WhiskActivation](entityStore, WhiskActivation.collectionName)
     private val pool = new ContainerPool(config, instance, verbosity)
     private val activationCounter = new Counter() // global activation counter
 
@@ -481,7 +483,6 @@ object Invoker {
         dockerImagePrefix -> null) ++
         WhiskAuthStore.requiredProperties ++
         WhiskEntityStore.requiredProperties ++
-        WhiskActivationStore.requiredProperties ++
         ContainerPool.requiredProperties ++
         kafkaHost ++
         edgeHost ++
