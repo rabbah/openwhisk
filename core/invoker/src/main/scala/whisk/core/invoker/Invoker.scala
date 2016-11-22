@@ -454,9 +454,8 @@ class Invoker(
     }
 
     private val authStore = WhiskAuthStore.datastore(config)
-    private val entityStore = WhiskEntityStore.allDatastores(config)
-    private val actionStore: ArtifactReader[WhiskAction] = WhiskEntityStore.getStore[WhiskAction](entityStore, WhiskAction.collectionName)
-    private val activationStore = WhiskEntityStore.getStore[WhiskActivation](entityStore, WhiskActivation.collectionName)
+    private val actionStore: ArtifactReader[WhiskAction] = WhiskAction.datastore(config)
+    private val activationStore = WhiskActivation.datastore(config)
     private val pool = new ContainerPool(config, instance, verbosity)
     private val activationCounter = new Counter() // global activation counter
 
