@@ -19,19 +19,14 @@ package whisk.core.entity
 import java.time.Clock
 import java.time.Instant
 
-import scala.Stream
 import scala.language.postfixOps
-import scala.util.Try
 
 import spray.json.DefaultJsonProtocol
 import spray.json.JsBoolean
 import spray.json.JsNumber
 import spray.json.JsObject
 import spray.json.JsString
-import spray.json.JsValue
-import spray.json.RootJsonFormat
 import whisk.core.entity.size.SizeInt
-import whisk.http.Messages
 
 /**
  * An abstract superclass that encapsulates properties common to all whisk entities (actions, rules, triggers).
@@ -106,38 +101,6 @@ object WhiskEntity {
      */
     def qualifiedName(namespace: EntityPath, activationId: ActivationId) = {
         s"$namespace${EntityPath.PATHSEP}$activationId"
-    }
-}
-
-/**
- * Dispatches to appropriate serdes. This object is not itself implicit so as to
- * avoid multiple implicit alternatives when working with one of the subtypes.
- */
-object WhiskEntityJsonFormat extends RootJsonFormat[WhiskEntity] {
-    // THE ORDER MATTERS! E.g. some triggers can deserialize as packages, but not
-    // the other way around. Try most specific first!
-    private def readers: Stream[JsValue => WhiskEntity] = Stream(
-        WhiskAction.serdes.read,
-        WhiskActivation.serdes.read,
-        WhiskRule.serdes.read,
-        WhiskTrigger.serdes.read,
-        WhiskPackage.serdes.read)
-
-    // Not necessarily the smartest way to go about this. In theory, whenever
-    // a more precise type is known, this method shouldn't be used.
-    override def read(js: JsValue): WhiskEntity = {
-        val successes: Stream[WhiskEntity] = readers.flatMap(r => Try(r(js)).toOption)
-        successes.headOption.getOrElse {
-            throw new IllegalStateException(Messages.corruptedEntity)
-        }
-    }
-
-    override def write(we: WhiskEntity): JsValue = we match {
-        case a: WhiskAction     => WhiskAction.serdes.write(a)
-        case a: WhiskActivation => WhiskActivation.serdes.write(a)
-        case p: WhiskPackage    => WhiskPackage.serdes.write(p)
-        case r: WhiskRule       => WhiskRule.serdes.write(r)
-        case t: WhiskTrigger    => WhiskTrigger.serdes.write(t)
     }
 }
 

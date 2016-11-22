@@ -108,7 +108,8 @@ object ReducedRule extends DefaultJsonProtocol {
 }
 
 object WhiskTrigger
-    extends DocumentFactory[WhiskTrigger]
+    extends WhiskEntityStore[WhiskTrigger]
+    with DocumentFactory[WhiskTrigger]
     with WhiskEntityQueries[WhiskTrigger]
     with DefaultJsonProtocol {
 

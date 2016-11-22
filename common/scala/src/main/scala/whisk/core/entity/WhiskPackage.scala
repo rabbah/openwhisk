@@ -25,7 +25,7 @@ import spray.json.DefaultJsonProtocol
 import spray.json.DefaultJsonProtocol._
 import spray.json._
 import whisk.common.TransactionId
-import whisk.core.database.DocumentFactory
+import whisk.core.database._
 import whisk.core.entity.types.EntityStore
 
 /**
@@ -148,7 +148,8 @@ case class WhiskPackageAction(name: EntityName, version: SemVer, annotations: Pa
 case class WhiskPackageWithActions(wp: WhiskPackage, actions: List[WhiskPackageAction], feeds: List[WhiskPackageAction])
 
 object WhiskPackage
-    extends DocumentFactory[WhiskPackage]
+    extends WhiskEntityStore[WhiskPackage]
+    with DocumentFactory[WhiskPackage]
     with WhiskEntityQueries[WhiskPackage]
     with DefaultJsonProtocol {
 
@@ -164,7 +165,7 @@ object WhiskPackage
      * @param mergeParameters flag that indicates whether parameters should be merged during package resolution
      * @return the same package if there is no binding, or the actual reference package otherwise
      */
-    def resolveBinding(db: EntityStore, pkg: DocId, mergeParameters: Boolean = false)(
+    def resolveBinding(db: ArtifactReader[WhiskPackage], pkg: DocId, mergeParameters: Boolean = false)(
         implicit ec: ExecutionContext, transid: TransactionId): Future[WhiskPackage] = {
         WhiskPackage.get(db, pkg) flatMap { wp =>
             // if there is a binding resolve it

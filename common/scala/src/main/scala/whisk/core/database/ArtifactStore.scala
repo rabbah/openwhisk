@@ -28,31 +28,16 @@ import whisk.common.Logging
 import whisk.common.TransactionId
 import whisk.core.entity.DocInfo
 
-/** Basic client to put and delete artifacts in a data store. */
-trait ArtifactStore[DocumentAbstraction] extends Logging {
-
+protected trait ArtifactBase {
     /** Execution context for futures */
     protected[core] implicit val executionContext: ExecutionContext
 
-    /**
-     * Puts (saves) document to database using a future.
-     * If the operation is successful, the future completes with DocId else an appropriate exception.
-     *
-     * @param d the document to put in the database
-     * @param transid the transaction id for logging
-     * @return a future that completes either with DocId
-     */
-    protected[database] def put(d: DocumentAbstraction)(implicit transid: TransactionId): Future[DocInfo]
+    /** Shut it down. After this invocation, every other call is invalid. */
+    def shutdown(): Unit
+}
 
-    /**
-     * Deletes document from database using a future.
-     * If the operation is successful, the future completes with true.
-     *
-     * @param doc the document info for the record to delete (must contain valid id and rev)
-     * @param transid the transaction id for logging
-     * @return a future that completes true iff the document is deleted, else future is failed
-     */
-    protected[database] def del(doc: DocInfo)(implicit transid: TransactionId): Future[Boolean]
+/** Basic client to get and query artifacts in a data store. */
+trait ArtifactReader[DocumentAbstraction] extends ArtifactBase with Logging {
 
     /**
      * Gets document from database by id using a future.
@@ -60,12 +45,9 @@ trait ArtifactStore[DocumentAbstraction] extends Logging {
      *
      * @param doc the document info for the record to get (must contain valid id and rev)
      * @param transid the transaction id for logging
-     * @param ma manifest for A to determine its runtime type, required by some db APIs
      * @return a future that completes either with DocumentAbstraction if the document exists and is deserializable into desired type
      */
-    protected[database] def get[A <: DocumentAbstraction](doc: DocInfo)(
-        implicit transid: TransactionId,
-        ma: Manifest[A]): Future[A]
+    protected[database] def get(doc: DocInfo)(implicit transid: TransactionId): Future[DocumentAbstraction]
 
     /**
      * Gets all documents from database view that match a start key, up to an end key, using a future.
@@ -82,21 +64,49 @@ trait ArtifactStore[DocumentAbstraction] extends Logging {
      * @param transid the transaction id for logging
      * @return a future that completes with List[JsObject] of all documents from view between start and end key (list may be empty)
      */
-    protected[core] def query(table: String, startKey: List[Any], endKey: List[Any], skip: Int, limit: Int, includeDocs: Boolean, descending: Boolean, reduce: Boolean)(
-        implicit transid: TransactionId): Future[List[JsObject]]
-
-    /**
-     * Attaches a "file" of type `contentType` to an existing document. The revision for the document must be set.
-     */
-    protected[core] def attach(doc: DocInfo, name: String, contentType: ContentType, docStream: Source[ByteString, _])(
-        implicit transid: TransactionId): Future[DocInfo]
+    protected[core] def query(
+        table: String, startKey: List[Any], endKey: List[Any],
+        skip: Int, limit: Int, includeDocs: Boolean, descending: Boolean, reduce: Boolean)(
+            implicit transid: TransactionId): Future[List[JsObject]]
 
     /**
      * Retrieves a saved attachment, streaming it into the provided Sink.
      */
     protected[core] def readAttachment[T](doc: DocInfo, name: String, sink: Sink[ByteString, Future[T]])(
         implicit transid: TransactionId): Future[(ContentType, T)]
-
-    /** Shut it down. After this invocation, every other call is invalid. */
-    def shutdown(): Unit
 }
+
+/** Basic client to put and delete artifacts in a data store. */
+trait ArtifactWriter[DocumentAbstraction] extends ArtifactBase with Logging {
+
+    /**
+     * Puts (saves) document to database using a future.
+     * If the operation is successful, the future completes with DocId else an appropriate exception.
+     *
+     * @param d the document to put in the database
+     * @param transid the transaction id for logging
+     * @param ev evidence that document of this type is serializable into a store document
+     * @return a future that completes either with DocId
+     */
+    protected[database] def put(d: DocumentAbstraction)(
+        implicit transid: TransactionId, ev: DocumentAbstraction => DocumentSerializer): Future[DocInfo]
+
+    /**
+     * Deletes document from database using a future.
+     * If the operation is successful, the future completes with true.
+     *
+     * @param doc the document info for the record to delete (must contain valid id and rev)
+     * @param transid the transaction id for logging
+     * @return a future that completes true iff the document is deleted, else future is failed
+     */
+    protected[database] def del(doc: DocInfo)(implicit transid: TransactionId): Future[Boolean]
+
+    /**
+     * Attaches a "file" of type `contentType` to an existing document. The revision for the document must be set.
+     */
+    protected[core] def attach(doc: DocInfo, name: String, contentType: ContentType, docStream: Source[ByteString, _])(
+        implicit transid: TransactionId): Future[DocInfo]
+}
+
+/** Basic client to read and write artifacts in a data store. */
+trait ArtifactStore[DocumentAbstraction] extends ArtifactReader[DocumentAbstraction] with ArtifactWriter[DocumentAbstraction]

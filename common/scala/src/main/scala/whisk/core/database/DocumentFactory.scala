@@ -133,8 +133,7 @@ trait DocumentFactory[W] extends MultipleReadersSingleWriterCache[W, DocInfo] {
      * @param transid the transaction id for logging
      * @return Future[DocInfo] with completion to DocInfo containing the save document id and revision
      */
-    def put[Wsuper >: W](db: ArtifactStore[Wsuper], doc: W)(
-        implicit transid: TransactionId): Future[DocInfo] = {
+    def put(db: ArtifactWriter[W], doc: W)(implicit transid: TransactionId, ev: W => DocumentSerializer): Future[DocInfo] = {
         Try {
             require(db != null, "db undefined")
             require(doc != null, "doc undefined")
@@ -158,7 +157,7 @@ trait DocumentFactory[W] extends MultipleReadersSingleWriterCache[W, DocInfo] {
         }
     }
 
-    def attach[Wsuper >: W](db: ArtifactStore[Wsuper], doc: DocInfo, attachmentName: String, contentType: ContentType, bytes: InputStream)(
+    def attach(db: ArtifactWriter[W], doc: DocInfo, attachmentName: String, contentType: ContentType, bytes: InputStream)(
         implicit transid: TransactionId): Future[DocInfo] = {
 
         Try {
@@ -181,7 +180,7 @@ trait DocumentFactory[W] extends MultipleReadersSingleWriterCache[W, DocInfo] {
         }
     }
 
-    def del[Wsuper >: W](db: ArtifactStore[Wsuper], doc: DocInfo)(
+    def del(db: ArtifactWriter[W], doc: DocInfo)(
         implicit transid: TransactionId): Future[Boolean] = {
         Try {
             require(db != null, "db undefined")
@@ -212,25 +211,24 @@ trait DocumentFactory[W] extends MultipleReadersSingleWriterCache[W, DocInfo] {
      * @param rev the document revision (optional)
      * @param fromCache will only query cache if true (defaults to collection settings)
      * @param transid the transaction id for logging
-     * @param mw a manifest for W (hint to compiler to preserve type R for runtime)
      * @return Future[W] with completion to Success(W), or Failure(Throwable) if the raw record cannot be converted into W
      */
-    def get[Wsuper >: W](db: ArtifactStore[Wsuper], doc: DocId, rev: DocRevision = DocRevision(), fromCache: Boolean = cacheEnabled)(
-        implicit transid: TransactionId, mw: Manifest[W]): Future[W] = {
+    def get(db: ArtifactReader[W], doc: DocId, rev: DocRevision = DocRevision(), fromCache: Boolean = cacheEnabled)(
+        implicit transid: TransactionId): Future[W] = {
         Try {
             require(db != null, "db undefined")
         } map {
             implicit val logger = db: Logging
             implicit val ec = db.executionContext
             val key = doc.asDocInfo(rev)
-            _ => cacheLookup(key, db.get[W](key), fromCache)
+            _ => cacheLookup(key, db.get(key), fromCache)
         } match {
             case Success(f) => f
             case Failure(t) => Future.failed(t)
         }
     }
 
-    def getAttachment[Wsuper >: W](db: ArtifactStore[Wsuper], doc: DocInfo, attachmentName: String, outputStream: OutputStream)(
+    def getAttachment(db: ArtifactReader[W], doc: DocInfo, attachmentName: String, outputStream: OutputStream)(
         implicit transid: TransactionId): Future[Unit] = {
 
         implicit val ec = db.executionContext

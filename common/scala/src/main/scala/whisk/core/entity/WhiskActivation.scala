@@ -121,7 +121,8 @@ case class WhiskActivation(
 }
 
 object WhiskActivation
-    extends DocumentFactory[WhiskActivation]
+    extends WhiskEntityStore[WhiskActivation]
+    with DocumentFactory[WhiskActivation]
     with WhiskEntityQueries[WhiskActivation]
     with DefaultJsonProtocol {
 

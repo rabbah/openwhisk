@@ -16,33 +16,38 @@
 
 package whisk.core.entity
 
+import java.time.Instant
+
 import scala.concurrent.Future
+import scala.language.postfixOps
 import scala.util.Try
+
 import akka.actor.ActorSystem
 import spray.json.JsObject
 import spray.json.JsString
 import spray.json.RootJsonFormat
 import whisk.common.TransactionId
 import whisk.core.WhiskConfig
-import whisk.core.WhiskConfig.dbProvider
-import whisk.core.WhiskConfig.dbProtocol
 import whisk.core.WhiskConfig.dbActivations
 import whisk.core.WhiskConfig.dbAuths
-import whisk.core.WhiskConfig.dbPassword
-import whisk.core.WhiskConfig.dbUsername
 import whisk.core.WhiskConfig.dbHost
+import whisk.core.WhiskConfig.dbPassword
 import whisk.core.WhiskConfig.dbPort
+import whisk.core.WhiskConfig.dbProtocol
+import whisk.core.WhiskConfig.dbProvider
+import whisk.core.WhiskConfig.dbUsername
 import whisk.core.WhiskConfig.dbWhisk
 import whisk.core.database.ArtifactStore
 import whisk.core.database.CouchDbRestStore
 import whisk.core.database.DocumentRevisionProvider
 import whisk.core.database.DocumentSerializer
-import java.time.Instant
-import scala.language.postfixOps
+import spray.json.DefaultJsonProtocol._
+import spray.json._
+import whisk.core.database.ArtifactReader
 
 package object types {
     type AuthStore = ArtifactStore[WhiskAuth]
-    type EntityStore = ArtifactStore[WhiskEntity]
+    type EntityStore = Map[String, ArtifactStore[_ <: WhiskEntity]]
     type ActivationStore = ArtifactStore[WhiskActivation]
 }
 
@@ -85,10 +90,17 @@ protected[core] trait WhiskDocument
 protected[core] object Util {
     def makeStore[D <: DocumentSerializer](config: WhiskConfig, name: WhiskConfig => String)(
         implicit jsonFormat: RootJsonFormat[D],
-        actorSystem: ActorSystem): ArtifactStore[D] = {
+        actorSystem: ActorSystem): ArtifactStore[D] = makeDbRestStore(config, name)
+
+    def makeReader[D](config: WhiskConfig, name: WhiskConfig => String)(
+        implicit jsonFormat: RootJsonFormat[D],
+        actorSystem: ActorSystem): ArtifactReader[D] = makeDbRestStore(config, name)
+
+    private def makeDbRestStore[D](config: WhiskConfig, name: WhiskConfig => String)(
+        implicit jsonFormat: RootJsonFormat[D],
+        actorSystem: ActorSystem): CouchDbRestStore[D] = {
         require(config != null && config.isValid, "config is undefined or not valid")
         require(config.dbProvider == "Cloudant" || config.dbProvider == "CouchDB", "Unsupported db.provider: " + config.dbProvider)
-        assume(Set(config.dbProtocol, config.dbHost, config.dbPort, config.dbUsername, config.dbPassword, name(config)).forall(_.nonEmpty), "At least one expected property is missing")
 
         new CouchDbRestStore[D](config.dbProtocol, config.dbHost, config.dbPort.toInt, config.dbUsername, config.dbPassword, name(config))
     }
@@ -108,21 +120,18 @@ object WhiskAuthStore {
         Util.makeStore[WhiskAuth](config, _.dbAuths)
 }
 
-object WhiskEntityStore {
-    def requiredProperties =
-        Map(dbProvider -> null,
-            dbProtocol -> null,
-            dbUsername -> null,
-            dbPassword -> null,
-            dbHost -> null,
-            dbPort -> null,
-            dbWhisk -> null)
+trait WhiskEntityStore[T <: WhiskEntity] {
+    val collectionName: String
+    protected def dbName(config: WhiskConfig) = config.dbWhisk
 
-    def datastore(config: WhiskConfig)(implicit system: ActorSystem) =
-        Util.makeStore[WhiskEntity](config, _.dbWhisk)(WhiskEntityJsonFormat, system)
+    def datastore(config: WhiskConfig)(implicit system: ActorSystem, serdes: RootJsonFormat[T]): ArtifactStore[T] = {
+        Util.makeStore[T](config, dbName)
+    }
 }
 
-object WhiskActivationStore {
+object WhiskEntityStore {
+    import types.EntityStore
+
     def requiredProperties =
         Map(dbProvider -> null,
             dbProtocol -> null,
@@ -130,10 +139,24 @@ object WhiskActivationStore {
             dbPassword -> null,
             dbHost -> null,
             dbPort -> null,
+            dbWhisk -> null,
             dbActivations -> null)
 
-    def datastore(config: WhiskConfig)(implicit system: ActorSystem) =
-        Util.makeStore[WhiskActivation](config, _.dbActivations)
+    def getStore[T <: WhiskEntity](stores: EntityStore, collection: String): ArtifactStore[T] = {
+        stores(collection).asInstanceOf[ArtifactStore[T]]
+    }
+
+    def entitySummaryReader(config: WhiskConfig)(implicit system: ActorSystem): ArtifactReader[JsObject] = {
+        Util.makeReader(config, _.dbWhisk)
+    }
+
+    def allDatastores(config: WhiskConfig)(implicit system: ActorSystem): EntityStore = {
+        Map(WhiskAction.collectionName -> WhiskAction.datastore(config),
+            WhiskTrigger.collectionName -> WhiskTrigger.datastore(config),
+            WhiskRule.collectionName -> WhiskRule.datastore(config),
+            WhiskPackage.collectionName -> WhiskPackage.datastore(config),
+            WhiskActivation.collectionName -> WhiskActivation.datastore(config))
+    }
 }
 
 /**
@@ -210,8 +233,8 @@ object WhiskEntityQueries {
      * Queries the datastore for all entities without activations in a namespace, and converts the list of entities
      * to a map that collects the entities by their type.
      */
-    def listEntitiesInNamespace[A <: WhiskEntity](
-        db: ArtifactStore[A],
+    def listEntitiesInNamespace(
+        db: ArtifactReader[JsObject],
         namespace: EntityPath,
         includeDocs: Boolean)(
             implicit transid: TransactionId): Future[Map[String, List[JsObject]]] = {

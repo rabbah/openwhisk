@@ -25,15 +25,14 @@ import akka.event.Logging.ErrorLevel
 import akka.http.scaladsl.model._
 import akka.stream.scaladsl._
 import akka.util.ByteString
-
 import spray.json._
-
 import whisk.common.LoggingMarkers
 import whisk.common.PrintStreamEmitter
 import whisk.common.TransactionId
-import whisk.core.entity.DocRevision
 import whisk.core.entity.DocInfo
+import whisk.core.entity.DocRevision
 import whisk.core.entity.WhiskDocument
+import scala.util.Failure
 
 /**
  * Basic client to put and delete artifacts in a data store.
@@ -46,7 +45,7 @@ import whisk.core.entity.WhiskDocument
  * @param dbName the name of the database to operate on
  * @param serializerEvidence confirms the document abstraction is serializable to a Document with an id
  */
-class CouchDbRestStore[DocumentAbstraction <: DocumentSerializer](
+class CouchDbRestStore[DocumentAbstraction](
     dbProtocol: String,
     dbHost: String,
     dbPort: Int,
@@ -62,7 +61,8 @@ class CouchDbRestStore[DocumentAbstraction <: DocumentSerializer](
 
     private val client: CouchDbRestClient = new CouchDbRestClient(dbProtocol, dbHost, dbPort.toInt, dbUsername, dbPassword, dbName)
 
-    override protected[database] def put(d: DocumentAbstraction)(implicit transid: TransactionId): Future[DocInfo] = {
+    override protected[database] def put(d: DocumentAbstraction)(
+        implicit transid: TransactionId, ev: DocumentAbstraction => DocumentSerializer): Future[DocInfo] = {
         val asJson = d.toDocumentRecord
 
         val id: String = asJson.fields("_id").convertTo[String].trim
@@ -97,7 +97,10 @@ class CouchDbRestStore[DocumentAbstraction <: DocumentSerializer](
             }
         }
 
-        reportFailure(f, failure => transid.failed(this, start, s"[PUT] '$dbName' internal error, failure: '${failure.getMessage}'", ErrorLevel))
+        f andThen {
+            case Failure(t) if !t.isInstanceOf[ArtifactStoreException] =>
+                transid.failed(this, start, s"[PUT] '$dbName' internal error, failure: '${t.getMessage}'", ErrorLevel)
+        }
     }
 
     override protected[database] def del(doc: DocInfo)(implicit transid: TransactionId): Future[Boolean] = {
@@ -126,16 +129,17 @@ class CouchDbRestStore[DocumentAbstraction <: DocumentSerializer](
             }
         }
 
-        reportFailure(f, failure => transid.failed(this, start, s"[DEL] '$dbName' internal error, doc: '$doc', failure: '${failure.getMessage}'", ErrorLevel))
+        f andThen {
+            case Failure(t) if !t.isInstanceOf[ArtifactStoreException] =>
+                transid.failed(this, start, s"[DEL] '$dbName' internal error, doc: '$doc', failure: '${t.getMessage}'", ErrorLevel)
+        }
     }
 
-    override protected[database] def get[A <: DocumentAbstraction](doc: DocInfo)(
-        implicit transid: TransactionId,
-        ma: Manifest[A]): Future[A] = {
+    override protected[database] def get(doc: DocInfo)(implicit transid: TransactionId): Future[DocumentAbstraction] = {
+        require(doc != null, "doc undefined")
 
         val start = transid.started(this, LoggingMarkers.DATABASE_GET, s"[GET] '$dbName' finding document: '$doc'")
 
-        require(doc != null, "doc undefined")
         val request: CouchDbRestClient => Future[Either[StatusCode, JsObject]] = if (doc.rev.rev != null) {
             client => client.getDoc(doc.id.id, doc.rev.rev)
         } else {
@@ -146,12 +150,7 @@ class CouchDbRestStore[DocumentAbstraction <: DocumentSerializer](
             e match {
                 case Right(response) =>
                     transid.finished(this, start, s"[GET] '$dbName' completed: found document '$doc'")
-                    val asFormat = jsonFormat.read(response)
-                    if (asFormat.getClass != ma.runtimeClass) {
-                        throw DocumentTypeMismatchException(s"document type ${asFormat.getClass} did not match expected type ${ma.runtimeClass}.")
-                    }
-
-                    val deserialized = asFormat.asInstanceOf[A]
+                    val deserialized = jsonFormat.read(response)
 
                     val responseRev = response.fields("_rev").convertTo[String]
                     assert(doc.rev.rev == null || doc.rev.rev == responseRev, "Returned revision should match original argument")
@@ -171,11 +170,16 @@ class CouchDbRestStore[DocumentAbstraction <: DocumentSerializer](
             }
         }
 
-        reportFailure(f, failure => transid.failed(this, start, s"[GET] '$dbName' internal error, doc: '$doc', failure: '${failure.getMessage}'", ErrorLevel))
+        f andThen {
+            case Failure(t) if !t.isInstanceOf[ArtifactStoreException] =>
+                transid.failed(this, start, s"[GET] '$dbName' internal error, doc: '$doc', failure: '${t.getMessage}'", ErrorLevel)
+        }
     }
 
-    override protected[core] def query(table: String, startKey: List[Any], endKey: List[Any], skip: Int, limit: Int, includeDocs: Boolean, descending: Boolean, reduce: Boolean)(
-        implicit transid: TransactionId): Future[List[JsObject]] = {
+    override protected[core] def query(
+        table: String, startKey: List[Any], endKey: List[Any],
+        skip: Int, limit: Int, includeDocs: Boolean, descending: Boolean, reduce: Boolean)(
+            implicit transid: TransactionId): Future[List[JsObject]] = {
 
         require(!(reduce && includeDocs), "reduce and includeDocs cannot both be true")
 
@@ -222,16 +226,19 @@ class CouchDbRestStore[DocumentAbstraction <: DocumentSerializer](
                 throw new Exception("Unexpected http response code: " + code)
         }
 
-        reportFailure(f, failure => transid.failed(this, start, s"[QUERY] '$dbName' internal error, failure: '${failure.getMessage}'", ErrorLevel))
+        f andThen {
+            case Failure(t) if !t.isInstanceOf[ArtifactStoreException] =>
+                transid.failed(this, start, s"[QUERY] '$dbName' internal error, failure: '${t.getMessage}'", ErrorLevel)
+        }
     }
 
     override protected[core] def attach(doc: DocInfo, name: String, contentType: ContentType, docStream: Source[ByteString, _])(
         implicit transid: TransactionId): Future[DocInfo] = {
 
-        val start = transid.started(this, LoggingMarkers.DATABASE_ATT_SAVE, s"[ATT_PUT] '$dbName' uploading attachment '$name' of document '$doc'")
-
         require(doc != null, "doc undefined")
         require(doc.rev.rev != null, "doc revision must be specified")
+
+        val start = transid.started(this, LoggingMarkers.DATABASE_ATT_SAVE, s"[ATT_PUT] '$dbName' uploading attachment '$name' of document '$doc'")
 
         val f = client.putAttachment(doc.id.id, doc.rev.rev, name, contentType, docStream).map { e =>
             e match {
@@ -251,16 +258,19 @@ class CouchDbRestStore[DocumentAbstraction <: DocumentSerializer](
             }
         }
 
-        reportFailure(f, failure => transid.failed(this, start, s"[ATT_PUT] '$dbName' internal error, name: '$name', doc: '$doc', failure: '${failure.getMessage}'", ErrorLevel))
+        f andThen {
+            case Failure(t) if !t.isInstanceOf[ArtifactStoreException] =>
+                transid.failed(this, start, s"[ATT_PUT] '$dbName' internal error, name: '$name', doc: '$doc', failure: '${t.getMessage}'", ErrorLevel)
+        }
     }
 
     override protected[core] def readAttachment[T](doc: DocInfo, name: String, sink: Sink[ByteString, Future[T]])(
         implicit transid: TransactionId): Future[(ContentType, T)] = {
 
-        val start = transid.started(this, LoggingMarkers.DATABASE_ATT_GET, s"[ATT_GET] '$dbName' finding attachment '$name' of document '$doc'")
-
         require(doc != null, "doc undefined")
         require(doc.rev.rev != null, "doc revision must be specified")
+
+        val start = transid.started(this, LoggingMarkers.DATABASE_ATT_GET, s"[ATT_GET] '$dbName' finding attachment '$name' of document '$doc'")
 
         val f = client.getAttachment[T](doc.id.id, doc.rev.rev, name, sink)
         val g = f.map { e =>
@@ -279,18 +289,13 @@ class CouchDbRestStore[DocumentAbstraction <: DocumentSerializer](
             }
         }
 
-        reportFailure(g, failure => transid.failed(this, start, s"[ATT_GET] '$dbName' internal error, name: '$name', doc: '$doc', failure: '${failure.getMessage}'", ErrorLevel))
+        g andThen {
+            case Failure(t) if !t.isInstanceOf[ArtifactStoreException] =>
+                transid.failed(this, start, s"[ATT_GET] '$dbName' internal error, name: '$name', doc: '$doc', failure: '${t.getMessage}'", ErrorLevel)
+        }
     }
 
     override def shutdown(): Unit = {
         Await.ready(client.shutdown(), 1.minute)
-    }
-
-    private def reportFailure[T, U](f: Future[T], onFailure: Throwable => U): Future[T] = {
-        f.onFailure({
-            case _: ArtifactStoreException => // These failures are intentional and shouldn't trigger the catcher.
-            case x                         => onFailure(x)
-        })
-        f
     }
 }

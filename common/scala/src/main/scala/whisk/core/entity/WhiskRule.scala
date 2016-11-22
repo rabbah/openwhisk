@@ -195,7 +195,8 @@ protected[core] object Status extends ArgNormalizer[Status] {
 }
 
 object WhiskRule
-    extends DocumentFactory[WhiskRule]
+    extends WhiskEntityStore[WhiskRule]
+    with DocumentFactory[WhiskRule]
     with WhiskEntityQueries[WhiskRule]
     with DefaultJsonProtocol {
 

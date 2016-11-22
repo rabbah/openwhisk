@@ -16,27 +16,26 @@
 
 package whisk.core.entity
 
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext
-import scala.util.{ Try, Success, Failure }
-
-import akka.http.scaladsl.model.ContentType
-import akka.http.scaladsl.model.MediaTypes
-
-import spray.json._
-import spray.json.DefaultJsonProtocol._
-
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.util.{ Try, Success, Failure }
+
+import akka.http.scaladsl.model.ContentType
+import akka.http.scaladsl.model.MediaTypes
+import spray.json._
+import spray.json.DefaultJsonProtocol._
 import whisk.common.Logging
 import whisk.common.TransactionId
-import whisk.core.database.ArtifactStore
+import whisk.core.database.ArtifactReader
+import whisk.core.database.ArtifactWriter
 import whisk.core.database.DocumentFactory
 import whisk.core.entity.Attachments._
-import whisk.core.entity.types.EntityStore
+import whisk.core.database.DocumentSerializer
 
 /**
  * ActionLimitsOption mirrors ActionLimits but makes both the timeout and memory
@@ -168,7 +167,8 @@ case class WhiskAction(
 }
 
 object WhiskAction
-    extends DocumentFactory[WhiskAction]
+    extends WhiskEntityStore[WhiskAction]
+    with DocumentFactory[WhiskAction]
     with WhiskEntityQueries[WhiskAction]
     with DefaultJsonProtocol {
 
@@ -203,8 +203,8 @@ object WhiskAction
     private val jarContentType = ContentType.Binary(MediaTypes.`application/java-archive`)
 
     // Overriden to store Java `exec` fields as attachments.
-    override def put[A >: WhiskAction](db: ArtifactStore[A], doc: WhiskAction)(
-        implicit transid: TransactionId): Future[DocInfo] = {
+    override def put(db: ArtifactWriter[WhiskAction], doc: WhiskAction)(
+        implicit transid: TransactionId, ev: WhiskAction => DocumentSerializer): Future[DocInfo] = {
 
         Try {
             require(db != null, "db undefined")
@@ -221,12 +221,12 @@ object WhiskAction
                     val stream = new ByteArrayInputStream(Base64.getDecoder().decode(jar))
 
                     for (
-                        i1 <- super.put(db, newDoc);
-                        i2 <- attach[A](db, i1, "jarfile", jarContentType, stream)
+                        i1 <- super.put(db, newDoc)(transid, ev);
+                        i2 <- attach(db, i1, "jarfile", jarContentType, stream)
                     ) yield i2
 
                 case _ =>
-                    super.put(db, doc)
+                    super.put(db, doc)(transid, ev)
             }
         } match {
             case Success(f) => f
@@ -235,8 +235,8 @@ object WhiskAction
     }
 
     // Overriden to retrieve attached Java `exec` fields.
-    override def get[A >: WhiskAction](db: ArtifactStore[A], doc: DocId, rev: DocRevision = DocRevision(), fromCache: Boolean)(
-        implicit transid: TransactionId, mw: Manifest[WhiskAction]): Future[WhiskAction] = {
+    override def get(db: ArtifactReader[WhiskAction], doc: DocId, rev: DocRevision = DocRevision(), fromCache: Boolean)(
+        implicit transid: TransactionId): Future[WhiskAction] = {
 
         implicit val ec = db.executionContext
 
@@ -248,7 +248,7 @@ object WhiskAction
                     val boas = new ByteArrayOutputStream()
                     val b64s = Base64.getEncoder().wrap(boas)
 
-                    getAttachment[A](db, action.docinfo, jarAttachmentName, b64s).map { _ =>
+                    getAttachment(db, action.docinfo, jarAttachmentName, b64s).map { _ =>
                         b64s.close()
                         val encoded = new String(boas.toByteArray(), StandardCharsets.UTF_8)
                         val newAction = action.copy(exec = JavaExec(Inline(encoded), m))
@@ -268,7 +268,7 @@ object WhiskAction
      * If it's a binding, rewrite the fully qualified name of the action using the actual package path name.
      * If it's the actual package, use its name directly as the package path name.
      */
-    def resolveAction(db: EntityStore, fullyQualifiedName: FullyQualifiedEntityName)(
+    def resolveAction(db: ArtifactReader[WhiskPackage], fullyQualifiedName: FullyQualifiedEntityName)(
         implicit ec: ExecutionContext, transid: TransactionId): Future[FullyQualifiedEntityName] = {
         // first check that there is a package to be resolved
         val entityPath = fullyQualifiedName.path
@@ -291,23 +291,23 @@ object WhiskAction
      * If it's the actual package, use its name directly as the package path name.
      * While traversing the package bindings, merge the parameters.
      */
-    def resolveActionAndMergeParameters(entityStore: EntityStore, fullyQualifiedName: FullyQualifiedEntityName)(
+    def resolveActionAndMergeParameters(actionsdb: ArtifactReader[WhiskAction], pkgsdb: ArtifactReader[WhiskPackage], fullyQualifiedName: FullyQualifiedEntityName)(
         implicit ec: ExecutionContext, transid: TransactionId): Future[WhiskAction] = {
         // first check that there is a package to be resolved
         val entityPath = fullyQualifiedName.path
         if (entityPath.defaultPackage) {
             // this is the default package, nothing to resolve
-            WhiskAction.get(entityStore, fullyQualifiedName.toDocId)
+            WhiskAction.get(actionsdb, fullyQualifiedName.toDocId)
         } else {
             // there is a package to be resolved
             val pkgDocid = fullyQualifiedName.pathToDocId
             val actionName = fullyQualifiedName.name
-            val wp = WhiskPackage.resolveBinding(entityStore, pkgDocid, mergeParameters = true)
+            val wp = WhiskPackage.resolveBinding(pkgsdb, pkgDocid, mergeParameters = true)
             wp flatMap { resolvedPkg =>
                 // fully resolved name for the action
                 val fqenAction = FullyQualifiedEntityName(resolvedPkg.namespace.addpath(resolvedPkg.name), actionName)
                 // get the whisk action associate with it and inherit the parameters from the package/binding
-                WhiskAction.get(entityStore, fqenAction.toDocId) map { _.inherit(resolvedPkg.parameters) }
+                WhiskAction.get(actionsdb, fqenAction.toDocId) map { _.inherit(resolvedPkg.parameters) }
             }
         }
     }
