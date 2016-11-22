@@ -79,17 +79,20 @@ trait WhiskTriggersApi extends WhiskCollectionAPI {
 
     protected override val collection = Collection(Collection.TRIGGERS)
 
-    /** An actor system for timed based futures */
+    /** An actor system for timed based futures. */
     protected implicit val actorSystem: ActorSystem
 
-    /** Database service to CRUD triggers */
+    /** Database service to CRUD triggers. */
     protected val entityStore: EntityStore
 
     /** Database service to get activations. */
     protected val activationStore: ActivationStore
 
-    /** Path to Triggers REST API */
+    /** Path to Triggers REST API. */
     protected val triggersPath = "triggers"
+
+    /** The datastore for triggers. */
+    private val db = WhiskEntityStore.getStore[WhiskTrigger](entityStore, collection.path)
 
     /**
      * Creates or updates trigger if it already exists. The PUT content is deserialized into a WhiskTriggerPut
@@ -108,7 +111,7 @@ trait WhiskTriggersApi extends WhiskCollectionAPI {
         parameter('overwrite ? false) { overwrite =>
             entity(as[WhiskTriggerPut]) { content =>
                 val docid = FullyQualifiedEntityName(namespace, name).toDocId
-                putEntity(WhiskTrigger, entityStore, docid, overwrite, update(content) _, () => { create(content, namespace, name) }, postProcess = Some { trigger =>
+                putEntity(WhiskTrigger, db, docid, overwrite, update(content) _, () => { create(content, namespace, name) }, postProcess = Some { trigger =>
                     completeAsTriggerResponse(trigger)
                 })
             }
@@ -129,7 +132,7 @@ trait WhiskTriggersApi extends WhiskCollectionAPI {
         entity(as[Option[JsObject]]) {
             payload =>
                 val docid = FullyQualifiedEntityName(namespace, name).toDocId
-                getEntity(WhiskTrigger, entityStore, docid, Some {
+                getEntity(WhiskTrigger, db, docid, Some {
                     trigger: WhiskTrigger =>
                         val args = trigger.parameters.merge(payload)
                         val triggerActivationId = activationIdFactory.make()
@@ -219,7 +222,7 @@ trait WhiskTriggersApi extends WhiskCollectionAPI {
      */
     override def remove(namespace: EntityPath, name: EntityName)(implicit transid: TransactionId) = {
         val docid = FullyQualifiedEntityName(namespace, name).toDocId
-        deleteEntity(WhiskTrigger, entityStore, docid, (t: WhiskTrigger) => Future successful true, postProcess = Some { trigger =>
+        deleteEntity(WhiskTrigger, db, docid, (t: WhiskTrigger) => Future successful true, postProcess = Some { trigger =>
             completeAsTriggerResponse(trigger)
         })
     }
@@ -234,7 +237,7 @@ trait WhiskTriggersApi extends WhiskCollectionAPI {
      */
     override def fetch(namespace: EntityPath, name: EntityName, env: Option[Parameters])(implicit transid: TransactionId) = {
         val docid = FullyQualifiedEntityName(namespace, name).toDocId
-        getEntity(WhiskTrigger, entityStore, docid, Some { trigger =>
+        getEntity(WhiskTrigger, db, docid, Some { trigger =>
             completeAsTriggerResponse(trigger)
         })
     }
@@ -255,7 +258,7 @@ trait WhiskTriggersApi extends WhiskCollectionAPI {
         parameter('skip ? 0, 'limit ? collection.listLimit, 'count ? false) {
             (skip, limit, count) =>
                 listEntities {
-                    WhiskTrigger.listCollectionInNamespace(entityStore, namespace, skip, limit, docs) map {
+                    WhiskTrigger.listCollectionInNamespace(db, namespace, skip, limit, docs) map {
                         list =>
                             val triggers = if (docs) {
                                 list.right.get map { WhiskTrigger.serdes.write(_) }

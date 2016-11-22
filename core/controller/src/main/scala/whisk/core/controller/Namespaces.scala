@@ -18,29 +18,24 @@ package whisk.core.controller
 
 import scala.util.Failure
 import scala.util.Success
+
 import spray.http.StatusCodes.InternalServerError
 import spray.http.StatusCodes.OK
-import spray.json.DefaultJsonProtocol._
 import spray.httpx.SprayJsonSupport._
+import spray.json.DefaultJsonProtocol._
+import spray.json._
 import spray.routing.Directives
 import whisk.common.TransactionId
+import whisk.core.database.ArtifactReader
 import whisk.core.entitlement.Collection
 import whisk.core.entitlement.Privilege.Privilege
 import whisk.core.entitlement.Privilege.READ
 import whisk.core.entitlement.Resource
-import whisk.core.entity.EntityPath
-import whisk.core.entity.Subject
-import whisk.core.entity.WhiskAction
-import whisk.core.entity.WhiskActivation
-import whisk.core.entity.WhiskPackage
-import whisk.core.entity.WhiskTrigger
-import whisk.core.entity.WhiskRule
-import whisk.core.entity.WhiskEntityStore
-import whisk.core.entity.types.EntityStore
-import whisk.http.ErrorResponse.terminate
-import whisk.core.entity.WhiskEntityQueries.listEntitiesInNamespace
+import whisk.core.entity._
+import whisk.core.entity.WhiskEntityQueries._
 import whisk.core.entity.Identity
 import whisk.core.iam.NamespaceProvider
+import whisk.http.ErrorResponse.terminate
 
 object WhiskNamespacesApi {
     def requiredProperties = WhiskEntityStore.requiredProperties
@@ -61,7 +56,7 @@ trait WhiskNamespacesApi
     protected override val collection = Collection(Collection.NAMESPACES)
 
     /** Database service to lookup entities in a namespace. */
-    protected val entityStore: EntityStore
+    protected val entitySummaryReader: ArtifactReader[JsObject]
 
     /** An identity provider. */
     protected val iam: NamespaceProvider
@@ -110,7 +105,7 @@ trait WhiskNamespacesApi
      * - 500 Internal Server Error
      */
     private def getAllInNamespace(namespace: EntityPath)(implicit transid: TransactionId) = {
-        onComplete(listEntitiesInNamespace(entityStore, namespace, false)) {
+        onComplete(listEntitiesInNamespace(entitySummaryReader, namespace, false)) {
             case Success(entities) => {
                 complete(OK, Namespaces.emptyNamespace ++ entities - WhiskActivation.collectionName)
             }

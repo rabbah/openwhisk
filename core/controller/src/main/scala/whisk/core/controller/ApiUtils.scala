@@ -20,35 +20,33 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
+
+import spray.http.StatusCode
 import spray.http.StatusCodes.Conflict
 import spray.http.StatusCodes.InternalServerError
 import spray.http.StatusCodes.NotFound
 import spray.http.StatusCodes.OK
-import spray.httpx.marshalling.ToResponseMarshallable.isMarshallable
 import spray.httpx.SprayJsonSupport._
-import spray.json.JsObject
-import spray.json.JsValue
-import spray.json.RootJsonFormat
+import spray.json._
 import spray.json.DefaultJsonProtocol._
-import spray.json.JsBoolean
-import spray.routing.RequestContext
 import spray.routing.Directives
-
+import spray.routing.RequestContext
 import whisk.common.Logging
 import whisk.common.TransactionId
 import whisk.core.controller.PostProcess.PostProcessEntity
 import whisk.core.database.ArtifactStore
-import whisk.core.database.DocumentFactory
-import whisk.core.database.NoDocumentException
 import whisk.core.database.DocumentConflictException
+import whisk.core.database.DocumentFactory
+import whisk.core.database.DocumentSerializer
+import whisk.core.database.DocumentTypeMismatchException
+import whisk.core.database.NoDocumentException
 import whisk.core.entity.DocId
 import whisk.core.entity.WhiskDocument
-import whisk.core.database.DocumentTypeMismatchException
 import whisk.core.entity.WhiskEntity
 import whisk.http.ErrorResponse
 import whisk.http.ErrorResponse.terminate
 import whisk.http.Messages._
-import spray.http.StatusCode
+import whisk.core.database.ArtifactReader
 
 
 /** An exception to throw inside a Predicate future. */
@@ -151,9 +149,9 @@ trait ReadOps extends Directives with Logging {
      * - 404 Not Found
      * - 500 Internal Server Error
      */
-    protected def getEntity[A, Au >: A](
+    protected def getEntity[A](
         factory: DocumentFactory[A],
-        datastore: ArtifactStore[Au],
+        datastore: ArtifactReader[A],
         docid: DocId,
         postProcess: Option[PostProcessEntity[A]] = None)(
             implicit transid: TransactionId,
@@ -188,9 +186,9 @@ trait ReadOps extends Directives with Logging {
      * - 404 Not Found
      * - 500 Internal Server Error
      */
-    protected def getEntityAndProject[A, Au >: A](
+    protected def getEntityAndProject[A](
         factory: DocumentFactory[A],
-        datastore: ArtifactStore[Au],
+        datastore: ArtifactReader[A],
         docid: DocId,
         project: A => JsObject)(
             implicit transid: TransactionId,
@@ -246,9 +244,9 @@ trait WriteOps extends Directives with Logging {
      * - 409 Conflict
      * - 500 Internal Server Error
      */
-    protected def putEntity[A, Au >: A](
+    protected def putEntity[A <: DocumentSerializer](
         factory: DocumentFactory[A],
-        datastore: ArtifactStore[Au],
+        datastore: ArtifactStore[A],
         docid: DocId,
         overwrite: Boolean,
         update: A => Future[A],
@@ -317,9 +315,9 @@ trait WriteOps extends Directives with Logging {
      * - 409 Conflict
      * - 500 Internal Server Error
      */
-    protected def deleteEntity[A <: WhiskDocument, Au >: A](
+    protected def deleteEntity[A <: WhiskDocument](
         factory: DocumentFactory[A],
-        datastore: ArtifactStore[Au],
+        datastore: ArtifactStore[A],
         docid: DocId,
         confirm: A => Future[Boolean],
         postProcess: Option[PostProcessEntity[A]] = None)(

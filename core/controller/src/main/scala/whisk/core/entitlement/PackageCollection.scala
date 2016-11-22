@@ -31,6 +31,8 @@ import whisk.http.Messages
 
 class PackageCollection(entityStore: EntityStore) extends Collection(Collection.PACKAGES) {
 
+    private val db = WhiskEntityStore.getStore[WhiskPackage](entityStore, path)
+
     protected override val allowedEntityRights = {
         Set(Privilege.READ, Privilege.PUT, Privilege.DELETE)
     }
@@ -81,7 +83,7 @@ class PackageCollection(entityStore: EntityStore) extends Collection(Collection.
 
         val right = Privilege.READ
 
-        WhiskPackage.get(entityStore, doc) flatMap {
+        WhiskPackage.get(db, doc) flatMap {
             case wp if wp.binding.isEmpty =>
                 val allowed = wp.publish || isOwner
                 info(this, s"entitlement check on package, '$right' allowed?: $allowed")

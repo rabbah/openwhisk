@@ -32,11 +32,13 @@ import akka.actor.ActorSystem
 import spray.json._
 import whisk.common.Logging
 import whisk.common.TransactionId
+import whisk.core.database.ArtifactStore
 import whisk.core.entity._
 import whisk.core.entity.size.SizeInt
 import whisk.core.entity.types._
 import whisk.http.Messages._
 import whisk.utils.ExecutionContextFactory.FutureExtensions
+import whisk.core.database.ArtifactReader
 
 trait SequenceActions extends Logging {
     services: WhiskServices =>
@@ -46,8 +48,9 @@ trait SequenceActions extends Logging {
     /** An actor system for timed based futures. */
     protected implicit val actorSystem: ActorSystem
 
-    /** Database service to CRUD actions. */
-    protected val entityStore: EntityStore
+    /** Database service to CRUD actions and access to packages. */
+    protected val actionsdb: ArtifactStore[WhiskAction]
+    protected val pkgsdb: ArtifactReader[WhiskPackage]
 
     /** Database service to get activations. */
     protected val activationStore: ActivationStore
@@ -279,7 +282,9 @@ trait SequenceActions extends Logging {
         // Note: the execution starts even if one of the futures retrieving an entity may fail
         // first components need to be resolved given any package bindings and the params need to be merged
         // NOTE: OLD-STYLE sequences may have default namespace in the names of the components, resolve default namespace first
-        val resolvedFutureActions = resolveDefaultNamespace(components, user) map { c => WhiskAction.resolveActionAndMergeParameters(entityStore, c) }
+        val resolvedFutureActions = resolveDefaultNamespace(components, user) map {
+            c => WhiskAction.resolveActionAndMergeParameters(actionsdb, pkgsdb, c)
+        }
 
         // "scan" the wskActions to execute them in blocking fashion
         // use scanLeft instead of foldLeft as we need the intermediate results

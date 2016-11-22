@@ -28,23 +28,16 @@ import spray.json.DefaultJsonProtocol.RootJsObjectFormat
 import spray.json.DeserializationException
 import spray.routing.Directives
 import whisk.common.TransactionId
-import whisk.core.entity.ActivationId
-import whisk.core.entity.DocId
-import whisk.core.entity.EntityName
-import whisk.core.entity.EntityPath
-import whisk.core.entity.WhiskActivation
-import whisk.core.entity.WhiskEntity
-import whisk.core.entity.WhiskActivationStore
+import whisk.core.entity._
 import whisk.core.entity.types.ActivationStore
 import whisk.core.entitlement.Collection
 import whisk.core.entitlement.Privilege.Privilege
 import whisk.core.entitlement.Privilege.READ
 import whisk.core.entitlement.Resource
 import scala.language.postfixOps
-import whisk.core.entity.Identity
 
 object WhiskActivationsApi {
-    def requiredProperties = WhiskActivationStore.requiredProperties
+    def requiredProperties = WhiskEntityStore.requiredProperties
 }
 
 /** A trait implementing the activations API. */

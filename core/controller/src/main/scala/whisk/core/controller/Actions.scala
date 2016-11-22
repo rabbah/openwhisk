@@ -51,6 +51,7 @@ import whisk.http.ErrorResponse.terminate
 import whisk.http.Messages._
 import whisk.http.Messages
 import whisk.utils.ExecutionContextFactory.FutureExtensions
+import whisk.core.database.ArtifactReader
 
 /**
  * A singleton object which defines the properties that must be present in a configuration
@@ -59,7 +60,6 @@ import whisk.utils.ExecutionContextFactory.FutureExtensions
 object WhiskActionsApi {
     def requiredProperties = WhiskServices.requiredProperties ++
         WhiskEntityStore.requiredProperties ++
-        WhiskActivationStore.requiredProperties ++
         Map(WhiskConfig.actionSequenceDefaultLimit -> null)
 
     /** Grace period after action timeout limit to poll for result. */
@@ -85,6 +85,10 @@ trait WhiskActionsApi extends WhiskCollectionAPI with SequenceActions with Refer
     protected val activationStore: ActivationStore
 
     private implicit val emitter: PrintStreamEmitter = this
+
+    /** The datastore for actions and packages. */
+    override val actionsdb = WhiskEntityStore.getStore[WhiskAction](entityStore, collection.path)
+    override val pkgsdb: ArtifactReader[WhiskPackage] = WhiskEntityStore.getStore[WhiskPackage](entityStore, WhiskPackage.collectionName)
 
     /**
      * Handles operations on action resources, which encompass these cases:
@@ -141,7 +145,7 @@ trait WhiskActionsApi extends WhiskCollectionAPI with SequenceActions with Refer
                         val right = if (m == GET || m == POST) Privilege.READ else collection.determineRight(m, Some(innername))
                         onComplete(entitlementProvider.check(user, right, packageResource)) {
                             case Success(true) =>
-                                getEntity(WhiskPackage, entityStore, packageDocId, Some {
+                                getEntity(WhiskPackage, pkgsdb, packageDocId, Some {
                                     if (right == Privilege.READ) {
                                         // need to merge package with action, hence authorize subject for package
                                         // access (if binding, then subject must be authorized for both the binding
@@ -197,7 +201,7 @@ trait WhiskActionsApi extends WhiskCollectionAPI with SequenceActions with Refer
 
                 onComplete(entitleReferencedEntities(user, Privilege.READ, request.exec)) {
                     case Success(true) =>
-                        putEntity(WhiskAction, entityStore, docid, overwrite,
+                        putEntity(WhiskAction, actionsdb, docid, overwrite,
                             update(user, request)_, () => { make(user, namespace, request, name) })
 
                     case failure => super.handleEntitlementFailure(failure)
@@ -221,7 +225,7 @@ trait WhiskActionsApi extends WhiskCollectionAPI with SequenceActions with Refer
         parameter('blocking ? false, 'result ? false) { (blocking, result) =>
             entity(as[Option[JsObject]]) { payload =>
                 val docid = FullyQualifiedEntityName(namespace, name).toDocId
-                getEntity(WhiskAction, entityStore, docid, Some {
+                getEntity(WhiskAction, actionsdb, docid, Some {
                     action: WhiskAction =>
                         onComplete(entitleReferencedEntities(user, Privilege.ACTIVATE, Some(action.exec))) {
                             case Success(true) =>
@@ -292,7 +296,7 @@ trait WhiskActionsApi extends WhiskCollectionAPI with SequenceActions with Refer
      */
     override def remove(namespace: EntityPath, name: EntityName)(implicit transid: TransactionId) = {
         val docid = FullyQualifiedEntityName(namespace, name).toDocId
-        deleteEntity(WhiskAction, entityStore, docid, (a: WhiskAction) => Future successful true)
+        deleteEntity(WhiskAction, actionsdb, docid, (a: WhiskAction) => Future successful true)
     }
 
     /**
@@ -305,7 +309,7 @@ trait WhiskActionsApi extends WhiskCollectionAPI with SequenceActions with Refer
      */
     override def fetch(namespace: EntityPath, name: EntityName, env: Option[Parameters])(implicit transid: TransactionId) = {
         val docid = FullyQualifiedEntityName(namespace, name).toDocId
-        getEntity(WhiskAction, entityStore, docid, Some { action: WhiskAction =>
+        getEntity(WhiskAction, actionsdb, docid, Some { action: WhiskAction =>
             val mergedAction = env map { action inherit _ } getOrElse action
             complete(OK, mergedAction)
         })
@@ -331,7 +335,7 @@ trait WhiskActionsApi extends WhiskCollectionAPI with SequenceActions with Refer
         parameter('skip ? 0, 'limit ? collection.listLimit, 'count ? false) {
             (skip, limit, count) =>
                 listEntities {
-                    WhiskAction.listCollectionInNamespace(entityStore, namespace, skip, limit, docs) map {
+                    WhiskAction.listCollectionInNamespace(actionsdb, namespace, skip, limit, docs) map {
                         list =>
                             val actions = if (docs) {
                                 list.right.get map { WhiskAction.serdes.write(_) }
@@ -626,7 +630,7 @@ trait WhiskActionsApi extends WhiskCollectionAPI with SequenceActions with Refer
         // but requires communicating back from the authorization service the
         // resolved namespace
         val docid = FullyQualifiedEntityName(ns, pkgname).toDocId
-        getEntity(WhiskPackage, entityStore, docid, Some { (wp: WhiskPackage) =>
+        getEntity(WhiskPackage, pkgsdb, docid, Some { (wp: WhiskPackage) =>
             val pkgns = wp.binding map { b =>
                 info(this, s"list actions in package binding '${wp.name}' -> '$b'")
                 b.namespace.addpath(b.name)
@@ -656,7 +660,7 @@ trait WhiskActionsApi extends WhiskCollectionAPI with SequenceActions with Refer
                 info(this, s"fetching package '$docid' for reference")
                 // already checked that subject is authorized for package and binding;
                 // this fetch is redundant but should hit the cache to ameliorate cost
-                getEntity(WhiskPackage, entityStore, docid, Some {
+                getEntity(WhiskPackage, pkgsdb, docid, Some {
                     mergeActionWithPackageAndDispatch(method, user, action, Some { wp }) _
                 })
         } getOrElse {
@@ -685,8 +689,7 @@ trait WhiskActionsApi extends WhiskCollectionAPI with SequenceActions with Refer
             Future.failed(TooManyActionsInSequence())
         } else {
             // resolve the action document id (if it's in a package/binding);
-            // this assumes that entityStore is the same for actions and packages
-            WhiskAction.resolveAction(entityStore, sequenceAction) flatMap { resolvedSeq =>
+            WhiskAction.resolveAction(pkgsdb, sequenceAction) flatMap { resolvedSeq =>
                 val atomicActionCnt = countAtomicActionsAndCheckCycle(resolvedSeq, components)
                 atomicActionCnt map { count =>
                     debug(this, s"sequence '$sequenceAction' atomic action count $count")
@@ -719,7 +722,7 @@ trait WhiskActionsApi extends WhiskCollectionAPI with SequenceActions with Refer
             Future.failed(TooManyActionsInSequence())
         } else {
             // resolve components wrt any package bindings
-            val resolvedComponentsFutures = components map { c => WhiskAction.resolveAction(entityStore, c) }
+            val resolvedComponentsFutures = components map { c => WhiskAction.resolveAction(pkgsdb, c) }
             // traverse the sequence structure by checking each of its components and do the following:
             // 1. check whether any action (sequence or not) referred by the sequence (directly or indirectly)
             //    is the same as the original sequence (aka origSequence)
@@ -733,7 +736,7 @@ trait WhiskActionsApi extends WhiskCollectionAPI with SequenceActions with Refer
                     } else {
                         // check whether component is a sequence or an atomic action
                         // if the component does not exist, the future will fail with appropriate error
-                        WhiskAction.get(entityStore, resolvedComponent.toDocId) flatMap { wskComponent =>
+                        WhiskAction.get(actionsdb, resolvedComponent.toDocId) flatMap { wskComponent =>
                             wskComponent.exec match {
                                 case SequenceExec(_, seqComponents) =>
                                     // sequence action, count the number of atomic actions in this sequence

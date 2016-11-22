@@ -53,6 +53,9 @@ trait WhiskPackagesApi extends WhiskCollectionAPI with ReferencedEntities {
     /** Must exclude any private packages when listing those in a namespace unless owned by subject. */
     protected override val listRequiresPrivateEntityFilter = true
 
+    /** The datastore for packages. */
+    private val db = WhiskEntityStore.getStore[WhiskPackage](entityStore, collection.path)
+
     /**
      * Creates or updates package/binding if it already exists. The PUT content is deserialized into a
      * WhiskPackagePut which is a subset of WhiskPackage (it eschews the namespace and entity name since
@@ -80,7 +83,7 @@ trait WhiskPackagesApi extends WhiskCollectionAPI with ReferencedEntities {
 
                 onComplete(entitlementProvider.check(user, Privilege.READ, referencedentities)) {
                     case Success(true) =>
-                        putEntity(WhiskPackage, entityStore, docid, overwrite,
+                        putEntity(WhiskPackage, db, docid, overwrite,
                             update(request) _, () => create(request, namespace, name))
                     case failure => rewriteEntitlementFailure(failure)
                 }
@@ -110,13 +113,13 @@ trait WhiskPackagesApi extends WhiskCollectionAPI with ReferencedEntities {
      */
     override def remove(namespace: EntityPath, name: EntityName)(implicit transid: TransactionId) = {
         val docid = FullyQualifiedEntityName(namespace, name).toDocId
-        deleteEntity(WhiskPackage, entityStore, docid, (wp: WhiskPackage) => {
+        deleteEntity(WhiskPackage, db, docid, (wp: WhiskPackage) => {
             wp.binding map {
                 // this is a binding, it is safe to remove
                 _ => Future.successful(true)
             } getOrElse {
                 // may only delete a package if all its ingredients are deleted already
-                WhiskAction.listCollectionInNamespace(entityStore, wp.namespace.addpath(wp.name), skip = 0, limit = 0) flatMap {
+                WhiskAction.listCollectionInNamespace(db, wp.namespace.addpath(wp.name), skip = 0, limit = 0) flatMap {
                     case Left(list) if (list.size != 0) =>
                         Future failed {
                             RejectRequest(Conflict, s"Package not empty (contains ${list.size} ${if (list.size == 1) "entity" else "entities"})")
@@ -138,7 +141,7 @@ trait WhiskPackagesApi extends WhiskCollectionAPI with ReferencedEntities {
      */
     override def fetch(namespace: EntityPath, name: EntityName, env: Option[Parameters])(implicit transid: TransactionId) = {
         val docid = FullyQualifiedEntityName(namespace, name).toDocId
-        getEntity(WhiskPackage, entityStore, docid, Some { mergePackageWithBinding() _ })
+        getEntity(WhiskPackage, db, docid, Some { mergePackageWithBinding() _ })
     }
 
     /**
@@ -164,7 +167,7 @@ trait WhiskPackagesApi extends WhiskCollectionAPI with ReferencedEntities {
                     terminate(BadRequest, "Parameters 'public' and 'docs' may not both be true at the same time")
                 } else listEntities {
                     if (!publicPackagesInAnyNamespace) {
-                        WhiskPackage.listCollectionInNamespace(entityStore, namespace, skip, limit, docs) map {
+                        WhiskPackage.listCollectionInNamespace(db, namespace, skip, limit, docs) map {
                             list =>
                                 // any subject is entitled to list packages in any namespace
                                 // however, they shall only observe public packages if the packages
@@ -180,7 +183,7 @@ trait WhiskPackagesApi extends WhiskCollectionAPI with ReferencedEntities {
                                     })
                         }
                     } else {
-                        WhiskPackage.listCollectionInAnyNamespace(entityStore, skip, limit, docs = false, reduce = publicPackagesInAnyNamespace) map {
+                        WhiskPackage.listCollectionInAnyNamespace(db, skip, limit, docs = false, reduce = publicPackagesInAnyNamespace) map {
                             _.left.get
                         }
                     }
@@ -192,7 +195,7 @@ trait WhiskPackagesApi extends WhiskCollectionAPI with ReferencedEntities {
      * Validates that a referenced binding exists.
      */
     private def checkBinding(binding: FullyQualifiedEntityName)(implicit transid: TransactionId): Future[Unit] = {
-        WhiskPackage.get(entityStore, binding.toDocId) recoverWith {
+        WhiskPackage.get(db, binding.toDocId) recoverWith {
             case t: NoDocumentException           => Future.failed(RejectRequest(BadRequest, Messages.bindingDoesNotExist))
             case t: DocumentTypeMismatchException => Future.failed(RejectRequest(Conflict, Messages.requestedBindingIsNotValid))
             case t                                => Future.failed(RejectRequest(BadRequest, t))
@@ -289,13 +292,13 @@ trait WhiskPackagesApi extends WhiskCollectionAPI with ReferencedEntities {
             case Binding(ns, n) =>
                 val docid = FullyQualifiedEntityName(ns, n).toDocId
                 info(this, s"fetching package '$docid' for reference")
-                getEntity(WhiskPackage, entityStore, docid, Some {
+                getEntity(WhiskPackage, db, docid, Some {
                     mergePackageWithBinding(Some { wp }) _
                 })
         } getOrElse {
             val pkg = ref map { _ inherit wp.parameters } getOrElse wp
             info(this, s"fetching package actions in '${wp.path}'")
-            val actions = WhiskAction.listCollectionInNamespace(entityStore, wp.path, skip = 0, limit = 0) flatMap {
+            val actions = WhiskAction.listCollectionInNamespace(db, wp.path, skip = 0, limit = 0) flatMap {
                 case Left(list) => Future.successful {
                     pkg withPackageActions (list map { o => WhiskPackageAction.serdes.read(o) })
                 }

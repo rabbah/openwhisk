@@ -39,6 +39,7 @@ import whisk.core.loadBalancer.LoadBalancerService
 import akka.event.Logging.LogLevel
 import whisk.core.entity.ActivationId.ActivationIdGenerator
 import whisk.core.iam.NamespaceProvider
+import whisk.core.database.ArtifactReader
 
 /**
  * Abstract class which provides basic Directives which are used to construct route structures
@@ -87,7 +88,6 @@ protected[controller] object RestAPIVersion_v1 {
             WhiskActionsApi.requiredProperties ++
             WhiskTriggersApi.requiredProperties ++
             WhiskRulesApi.requiredProperties ++
-            WhiskActivationsApi.requiredProperties ++
             WhiskPackagesApi.requiredProperties ++
             Authenticate.requiredProperties ++
             Collection.requiredProperties
@@ -154,8 +154,9 @@ protected[controller] class RestAPIVersion_v1(
 
     // initialize datastores
     protected implicit val authStore = WhiskAuthStore.datastore(config)
-    protected implicit val entityStore = WhiskEntityStore.datastore(config)
-    protected implicit val activationStore = WhiskActivationStore.datastore(config)
+    protected implicit val entityStore = WhiskEntityStore.allDatastores(config)
+    protected implicit val activationsStore = WhiskEntityStore.getStore[WhiskActivation](entityStore, WhiskActivation.collectionName)
+    protected implicit val entitySummaryReader = WhiskEntityStore.entitySummaryReader(config)
 
     // initialize backend services
     protected implicit val consulServer = WhiskServices.consulServer(config)
@@ -167,8 +168,7 @@ protected[controller] class RestAPIVersion_v1(
     // register collections and set verbosities on datastores and backend services
     Collection.initialize(entityStore, verbosity)
     authStore.setVerbosity(verbosity)
-    entityStore.setVerbosity(verbosity)
-    activationStore.setVerbosity(verbosity)
+    entityStore.mapValues(_.setVerbosity(verbosity))
     iamProvider.setVerbosity(verbosity)
     entitlementService.setVerbosity(verbosity)
 
@@ -183,7 +183,7 @@ protected[controller] class RestAPIVersion_v1(
         val apipath: String,
         val apiversion: String,
         val verbosity: LogLevel)(
-            implicit override val entityStore: EntityStore,
+            implicit override val entitySummaryReader: ArtifactReader[JsObject],
             override val iam: NamespaceProvider,
             override val entitlementProvider: EntitlementProvider,
             override val executionContext: ExecutionContext)
