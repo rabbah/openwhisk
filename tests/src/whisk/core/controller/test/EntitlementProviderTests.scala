@@ -618,4 +618,214 @@ class EntitlementProviderTests
                 Await.ready(check, requestTimeout).eitherValue.get shouldBe expected
         }
     }
+
+    it should "allow activation of an action sequence containing reference to public package" in {
+        implicit val tid = transid()
+        implicit val ep = entitlementProvider
+
+        val paths = Seq(
+            (READ, someUser, Right(false)),
+            (PUT, someUser, Right(false)),
+            (DELETE, someUser, Right(false)),
+            (ACTIVATE, someUser, Right(false)),
+            (REJECT, someUser, Right(false)),
+
+            (READ, guestUser, Right(true)),
+            (PUT, guestUser, Right(true)),
+            (DELETE, guestUser, Right(true)),
+            (ACTIVATE, guestUser, Right(true)),
+            (REJECT, guestUser, Right(false)))
+
+        val provider = WhiskPackage(someUser.namespace.toPath, MakeName.next(), None, publish = true)
+        val action = WhiskAction(provider.path, MakeName.next(), Exec.js(""))
+        val sequence = WhiskAction(guestUser.namespace.toPath, MakeName.next(), Exec.sequence(Vector(action.fullyQualifiedName(false))))
+        put(entityStore, provider)
+        put(entityStore, action)
+        put(entityStore, sequence)
+
+        paths.map {
+            case (priv, who, expected) =>
+                val check = new ActionCollection(entityStore).implicitRights(
+                    who,
+                    Set(who.namespace()),
+                    priv,
+                    Resource(sequence.namespace, ACTIONS, Some(sequence.name())))
+                Await.ready(check, requestTimeout).eitherValue.get shouldBe expected
+        }
+    }
+
+    it should "allow activation of an action sequence containing reference to binding of public package" in {
+        implicit val tid = transid()
+        implicit val ep = entitlementProvider
+
+        val paths = Seq(
+            (READ, someUser, Right(false)),
+            (PUT, someUser, Right(false)),
+            (DELETE, someUser, Right(false)),
+            (ACTIVATE, someUser, Right(false)),
+            (REJECT, someUser, Right(false)),
+
+            (READ, guestUser, Right(true)),
+            (PUT, guestUser, Right(true)),
+            (DELETE, guestUser, Right(true)),
+            (ACTIVATE, guestUser, Right(true)),
+            (REJECT, guestUser, Right(false)))
+
+        val provider = WhiskPackage(someUser.namespace.toPath, MakeName.next(), None, publish = true)
+        val binding = WhiskPackage(guestUser.namespace.toPath, MakeName.next(), provider.bind)
+        val action = WhiskAction(provider.path, MakeName.next(), Exec.js(""))
+        val sequence = WhiskAction(guestUser.namespace.toPath, MakeName.next(), Exec.sequence(Vector(FullyQualifiedEntityName(binding.path, action.name))))
+        put(entityStore, provider)
+        put(entityStore, binding)
+        put(entityStore, action)
+        put(entityStore, sequence)
+
+        paths.map {
+            case (priv, who, expected) =>
+                val check = new ActionCollection(entityStore).implicitRights(
+                    who,
+                    Set(who.namespace()),
+                    priv,
+                    Resource(sequence.namespace, ACTIONS, Some(sequence.name())))
+                Await.ready(check, requestTimeout).eitherValue.get shouldBe expected
+        }
+    }
+
+    it should "allow activation of an action sequence containing reference to action in default package of same namspace" in {
+        implicit val tid = transid()
+        implicit val ep = entitlementProvider
+
+        val paths = Seq(
+            (READ, someUser, Right(true)),
+            (PUT, someUser, Right(true)),
+            (DELETE, someUser, Right(true)),
+            (ACTIVATE, someUser, Right(true)),
+            (REJECT, someUser, Right(false)),
+
+            (READ, guestUser, Right(false)),
+            (PUT, guestUser, Right(false)),
+            (DELETE, guestUser, Right(false)),
+            (ACTIVATE, guestUser, Right(false)),
+            (REJECT, guestUser, Right(false)))
+
+        val action = WhiskAction(someUser.namespace.toPath, MakeName.next(), Exec.js(""))
+        val sequence = WhiskAction(someUser.namespace.toPath, MakeName.next(), Exec.sequence(Vector(action.fullyQualifiedName(false))))
+        put(entityStore, action)
+        put(entityStore, sequence)
+
+        paths.map {
+            case (priv, who, expected) =>
+                val check = new ActionCollection(entityStore).implicitRights(
+                    who,
+                    Set(who.namespace()),
+                    priv,
+                    Resource(sequence.namespace, ACTIONS, Some(sequence.name())))
+                Await.ready(check, requestTimeout).eitherValue.get shouldBe expected
+        }
+    }
+
+    it should "reject activation of an action sequence containing reference to private package" in {
+        implicit val tid = transid()
+        implicit val ep = entitlementProvider
+
+        val paths = Seq(
+            (READ, someUser, Right(false)),
+            (PUT, someUser, Right(false)),
+            (DELETE, someUser, Right(false)),
+            (ACTIVATE, someUser, Right(false)),
+            (REJECT, someUser, Right(false)),
+
+            (READ, guestUser, Right(true)), // can read sequence, doesn't grant access to read referenced actions
+            (PUT, guestUser, Right(true)), // can put and delete since only modifying entity in owned namespace
+            (DELETE, guestUser, Right(true)),
+            (ACTIVATE, guestUser, Right(false)), // cannot activate because action is not accessible
+            (REJECT, guestUser, Right(false)))
+
+        val provider = WhiskPackage(someUser.namespace.toPath, MakeName.next(), None, publish = false)
+        val action = WhiskAction(provider.path, MakeName.next(), Exec.js(""))
+        val sequence = WhiskAction(guestUser.namespace.toPath, MakeName.next(), Exec.sequence(Vector(action.fullyQualifiedName(false))))
+        put(entityStore, provider)
+        put(entityStore, action)
+        put(entityStore, sequence)
+
+        paths.map {
+            case (priv, who, expected) =>
+                val check = new ActionCollection(entityStore).implicitRights(
+                    who,
+                    Set(who.namespace()),
+                    priv,
+                    Resource(sequence.namespace, ACTIONS, Some(sequence.name())))
+                Await.ready(check, requestTimeout).eitherValue.get shouldBe expected
+        }
+    }
+
+    it should "reject activation of an action sequence containing reference to binding of private package" in {
+        implicit val tid = transid()
+        implicit val ep = entitlementProvider
+
+        val paths = Seq(
+            (READ, someUser, Right(false)),
+            (PUT, someUser, Right(false)),
+            (DELETE, someUser, Right(false)),
+            (ACTIVATE, someUser, Right(false)),
+            (REJECT, someUser, Right(false)),
+
+            (READ, guestUser, Right(true)),
+            (PUT, guestUser, Right(true)),
+            (DELETE, guestUser, Right(true)),
+            (ACTIVATE, guestUser, Right(false)),
+            (REJECT, guestUser, Right(false)))
+
+        val provider = WhiskPackage(someUser.namespace.toPath, MakeName.next(), None, publish = false)
+        val binding = WhiskPackage(guestUser.namespace.toPath, MakeName.next(), provider.bind)
+        val action = WhiskAction(provider.path, MakeName.next(), Exec.js(""))
+        val sequence = WhiskAction(guestUser.namespace.toPath, MakeName.next(), Exec.sequence(Vector(FullyQualifiedEntityName(binding.path, action.name))))
+        put(entityStore, provider)
+        put(entityStore, binding)
+        put(entityStore, action)
+        put(entityStore, sequence)
+
+        paths.map {
+            case (priv, who, expected) =>
+                val check = new ActionCollection(entityStore).implicitRights(
+                    who,
+                    Set(who.namespace()),
+                    priv,
+                    Resource(sequence.namespace, ACTIONS, Some(sequence.name())))
+                Await.ready(check, requestTimeout).eitherValue.get shouldBe expected
+        }
+    }
+
+    it should "reject activation of an action sequence containing reference to action in default package of another namspace" in {
+        implicit val tid = transid()
+        implicit val ep = entitlementProvider
+
+        val paths = Seq(
+            (READ, someUser, Right(false)),
+            (PUT, someUser, Right(false)),
+            (DELETE, someUser, Right(false)),
+            (ACTIVATE, someUser, Right(false)),
+            (REJECT, someUser, Right(false)),
+
+            (READ, guestUser, Right(true)),
+            (PUT, guestUser, Right(true)),
+            (DELETE, guestUser, Right(true)),
+            (ACTIVATE, guestUser, Right(false)),
+            (REJECT, guestUser, Right(false)))
+
+        val action = WhiskAction(someUser.namespace.toPath, MakeName.next(), Exec.js(""))
+        val sequence = WhiskAction(guestUser.namespace.toPath, MakeName.next(), Exec.sequence(Vector(action.fullyQualifiedName(false))))
+        put(entityStore, action)
+        put(entityStore, sequence)
+
+        paths.map {
+            case (priv, who, expected) =>
+                val check = new ActionCollection(entityStore).implicitRights(
+                    who,
+                    Set(who.namespace()),
+                    priv,
+                    Resource(sequence.namespace, ACTIONS, Some(sequence.name())))
+                Await.ready(check, requestTimeout).eitherValue.get shouldBe expected
+        }
+    }
 }
