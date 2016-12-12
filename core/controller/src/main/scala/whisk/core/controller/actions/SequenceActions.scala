@@ -40,6 +40,7 @@ import whisk.core.controller.WhiskServices
 import whisk.core.entity._
 import whisk.core.entity.size.SizeInt
 import whisk.core.entity.types._
+import whisk.core.entitystore.AccessControl
 import whisk.http.Messages._
 import whisk.utils.ExecutionContextFactory.FutureExtensions
 
@@ -55,6 +56,9 @@ protected[actions] trait SequenceActions extends Logging {
 
     /** Database service to CRUD actions. */
     protected val entityStore: EntityStore
+
+    /** An access control gateway for fetching resources. */
+    protected val accessControl: AccessControl
 
     /** Database service to get activations. */
     protected val activationStore: ActivationStore
@@ -291,7 +295,7 @@ protected[actions] trait SequenceActions extends Logging {
         // Note: the execution starts even if one of the futures retrieving an entity may fail
         // first components need to be resolved given any package bindings and the params need to be merged
         // NOTE: OLD-STYLE sequences may have default namespace in the names of the components, resolve default namespace first
-        val resolvedFutureActions = resolveDefaultNamespace(components, user) map { c => WhiskAction.resolveActionAndMergeParameters(entityStore, c) }
+        val resolvedFutureActions = resolveDefaultNamespace(components, user) map { c => accessControl.resolveActionAndMergeParameters(entityStore, c) }
 
         // "scan" the wskActions to execute them in blocking fashion
         // use scanLeft instead of foldLeft as we need the intermediate results

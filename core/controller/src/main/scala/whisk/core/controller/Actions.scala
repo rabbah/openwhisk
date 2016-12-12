@@ -44,6 +44,7 @@ import whisk.core.entitlement.Privilege._
 import whisk.core.entity._
 import whisk.core.entity.types.ActivationStore
 import whisk.core.entity.types.EntityStore
+import whisk.core.entitystore.AccessControl
 import whisk.http.ErrorResponse.terminate
 import whisk.http.Messages._
 import whisk.http.Messages
@@ -80,8 +81,8 @@ trait WhiskActionsApi
     /** Database service to CRUD actions. */
     protected val entityStore: EntityStore
 
-    /** Database service to get activations. */
-    protected val activationStore: ActivationStore
+    /** An access control gateway for fetching resources. */
+    protected val accessControl: AccessControl
 
     private implicit val emitter: PrintStreamEmitter = this
 
@@ -389,7 +390,7 @@ trait WhiskActionsApi
         content.exec map {
             case seq: SequenceExec =>
                 // check that the sequence conforms to max length and no recursion rules
-                checkSequenceActionLimits(entityName, seq.components) map {
+                checkSequenceActionLimits(user, entityName, seq.components) map {
                     _ => makeWhiskAction(content.replace(seq), entityName)
                 }
             case _ => Future successful { makeWhiskAction(content, entityName) }
@@ -401,7 +402,7 @@ trait WhiskActionsApi
         content.exec map {
             case seq: SequenceExec =>
                 // check that the sequence conforms to max length and no recursion rules
-                checkSequenceActionLimits(FullyQualifiedEntityName(action.namespace, action.name), seq.components) map {
+                checkSequenceActionLimits(user, FullyQualifiedEntityName(action.namespace, action.name), seq.components) map {
                     _ => updateWhiskAction(content.replace(seq), action)
                 }
             case _ => Future successful { updateWhiskAction(content, action) }
@@ -525,7 +526,7 @@ trait WhiskActionsApi
      * @param sequenceAction is the action sequence to check
      * @param components the components of the sequence
      */
-    private def checkSequenceActionLimits(sequenceAction: FullyQualifiedEntityName, components: Vector[FullyQualifiedEntityName])(
+    private def checkSequenceActionLimits(user: Identity, sequenceAction: FullyQualifiedEntityName, components: Vector[FullyQualifiedEntityName])(
         implicit transid: TransactionId): Future[Unit] = {
         // first checks that current sequence length is allowed
         // then traverses all actions in the sequence, inlining any that are sequences
@@ -534,8 +535,8 @@ trait WhiskActionsApi
         } else {
             // resolve the action document id (if it's in a package/binding);
             // this assumes that entityStore is the same for actions and packages
-            WhiskAction.resolveAction(entityStore, sequenceAction) flatMap { resolvedSeq =>
-                val atomicActionCnt = countAtomicActionsAndCheckCycle(resolvedSeq, components)
+            accessControl.resolveAction(entityStore, sequenceAction) flatMap { resolvedSeq =>
+                val atomicActionCnt = countAtomicActionsAndCheckCycle(user, resolvedSeq, components)
                 atomicActionCnt map { count =>
                     debug(this, s"sequence '$sequenceAction' atomic action count $count")
                     if (count > actionSequenceLimit) {
@@ -561,13 +562,13 @@ trait WhiskActionsApi
      * @param the components of the a sequence to check if they reference the original sequence
      * @return Future with the number of atomic actions in the current sequence or an appropriate error if there is a cycle or a non-existent action reference
      */
-    private def countAtomicActionsAndCheckCycle(origSequence: FullyQualifiedEntityName, components: Vector[FullyQualifiedEntityName])(
+    private def countAtomicActionsAndCheckCycle(user: Identity, origSequence: FullyQualifiedEntityName, components: Vector[FullyQualifiedEntityName])(
         implicit transid: TransactionId): Future[Int] = {
         if (components.size > actionSequenceLimit) {
             Future.failed(TooManyActionsInSequence())
         } else {
             // resolve components wrt any package bindings
-            val resolvedComponentsFutures = components map { c => WhiskAction.resolveAction(entityStore, c) }
+            val resolvedComponentsFutures = components map { c => accessControl.resolveAction(entityStore, c) }
             // traverse the sequence structure by checking each of its components and do the following:
             // 1. check whether any action (sequence or not) referred by the sequence (directly or indirectly)
             //    is the same as the original sequence (aka origSequence)
@@ -581,11 +582,11 @@ trait WhiskActionsApi
                     } else {
                         // check whether component is a sequence or an atomic action
                         // if the component does not exist, the future will fail with appropriate error
-                        WhiskAction.get(entityStore, resolvedComponent.toDocId) flatMap { wskComponent =>
+                        accessControl.getAction(user, resolvedComponent) flatMap { wskComponent =>
                             wskComponent.exec match {
                                 case SequenceExec(seqComponents) =>
                                     // sequence action, count the number of atomic actions in this sequence
-                                    countAtomicActionsAndCheckCycle(origSequence, seqComponents)
+                                    countAtomicActionsAndCheckCycle(user, origSequence, seqComponents)
                                 case _ => Future successful 1 // atomic action count is one
                             }
                         }

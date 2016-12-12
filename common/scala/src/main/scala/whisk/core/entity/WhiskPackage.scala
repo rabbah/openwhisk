@@ -164,30 +164,6 @@ object WhiskPackage
     val bindingFieldName = "binding"
     override val collectionName = "packages"
 
-    /**
-     * Traverses a binding recursively to find the root package and
-     * merges parameters along the way if mergeParameters flag is set.
-     *
-     * @param db the entity store containing packages
-     * @param pkg the package document id to start resolving
-     * @param mergeParameters flag that indicates whether parameters should be merged during package resolution
-     * @return the same package if there is no binding, or the actual reference package otherwise
-     */
-    def resolveBinding(db: EntityStore, pkg: DocId, mergeParameters: Boolean = false)(
-        implicit ec: ExecutionContext, transid: TransactionId): Future[WhiskPackage] = {
-        WhiskPackage.get(db, pkg) flatMap { wp =>
-            // if there is a binding resolve it
-            val resolved = wp.binding map { binding =>
-                if (mergeParameters) {
-                    resolveBinding(db, binding.docid, true) map {
-                        resolvedPackage => resolvedPackage.mergeParameters(wp.parameters)
-                    }
-                } else resolveBinding(db, binding.docid)
-            }
-            resolved getOrElse Future.successful(wp)
-        }
-    }
-
     override implicit val serdes = {
         /**
          * Custom serdes for a binding - this property must be present in the datastore records for

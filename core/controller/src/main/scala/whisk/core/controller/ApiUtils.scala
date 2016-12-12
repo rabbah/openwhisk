@@ -20,35 +20,35 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
+
+import spray.http.StatusCode
 import spray.http.StatusCodes.Conflict
 import spray.http.StatusCodes.InternalServerError
 import spray.http.StatusCodes.NotFound
 import spray.http.StatusCodes.OK
-import spray.httpx.marshalling.ToResponseMarshallable.isMarshallable
 import spray.httpx.SprayJsonSupport._
+import spray.httpx.marshalling.ToResponseMarshallable.isMarshallable
+import spray.json.DefaultJsonProtocol._
+import spray.json.JsBoolean
 import spray.json.JsObject
 import spray.json.JsValue
 import spray.json.RootJsonFormat
-import spray.json.DefaultJsonProtocol._
-import spray.json.JsBoolean
-import spray.routing.RequestContext
 import spray.routing.Directives
-
+import spray.routing.RequestContext
 import whisk.common.Logging
 import whisk.common.TransactionId
 import whisk.core.controller.PostProcess.PostProcessEntity
 import whisk.core.database.ArtifactStore
-import whisk.core.database.DocumentFactory
-import whisk.core.database.NoDocumentException
 import whisk.core.database.DocumentConflictException
+import whisk.core.database.DocumentFactory
+import whisk.core.database.DocumentTypeMismatchException
+import whisk.core.database.NoDocumentException
 import whisk.core.entity.DocId
 import whisk.core.entity.WhiskDocument
-import whisk.core.database.DocumentTypeMismatchException
 import whisk.core.entity.WhiskEntity
 import whisk.http.ErrorResponse
 import whisk.http.ErrorResponse.terminate
 import whisk.http.Messages._
-import spray.http.StatusCode
 
 /** An exception to throw inside a Predicate future. */
 protected[core] case class RejectRequest(code: StatusCode, message: Option[ErrorResponse]) extends Throwable {
@@ -168,6 +168,9 @@ trait ReadOps extends Directives with Logging {
             case Failure(t: DocumentTypeMismatchException) =>
                 info(this, s"[GET] entity conformance check failed: ${t.getMessage}")
                 terminate(Conflict, conformanceMessage)
+            case Failure(RejectRequest(code, message)) =>
+                info(this, s"[GET] entity rejected with code $code: $message")
+                terminate(code, message)
             case Failure(t: Throwable) =>
                 error(this, s"[GET] entity failed: ${t.getMessage}")
                 terminate(InternalServerError, t.getMessage)

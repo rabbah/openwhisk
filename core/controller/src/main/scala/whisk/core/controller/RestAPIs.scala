@@ -40,6 +40,7 @@ import whisk.core.loadBalancer.LoadBalancerService
 import akka.event.Logging.LogLevel
 import whisk.core.entity.ActivationId.ActivationIdGenerator
 import whisk.core.iam.NamespaceProvider
+import whisk.core.entitystore.AccessControl
 
 /**
  * Abstract class which provides basic Directives which are used to construct route structures
@@ -163,6 +164,7 @@ protected[controller] class RestAPIVersion_v1(
     protected implicit val loadBalancer = WhiskServices.makeLoadBalancerComponent(config)
     protected implicit val iamProvider = WhiskServices.iamProvider(config)
     protected implicit val entitlementService = WhiskServices.entitlementService(config, loadBalancer, iamProvider)
+    protected implicit val accessControl = new AccessControl(entityStore, entitlementService)
     protected implicit val activationId = new ActivationIdGenerator {}
 
     // register collections and set verbosities on datastores and backend services
@@ -202,6 +204,7 @@ protected[controller] class RestAPIVersion_v1(
             override val activationStore: ActivationStore,
             override val iam: NamespaceProvider,
             override val entitlementProvider: EntitlementProvider,
+            override val accessControl: AccessControl,
             override val activationIdFactory: ActivationIdGenerator,
             override val loadBalancer: LoadBalancerService,
             override val consulServer: String,
@@ -239,6 +242,7 @@ protected[controller] class RestAPIVersion_v1(
             override val entityStore: EntityStore,
             override val iam: NamespaceProvider,
             override val entitlementProvider: EntitlementProvider,
+            override val accessControl: AccessControl,
             override val activationIdFactory: ActivationIdGenerator,
             override val loadBalancer: LoadBalancerService,
             override val consulServer: String,
@@ -284,6 +288,7 @@ protected[controller] class RestAPIVersion_v1(
             override val activationStore: ActivationStore,
             override val iam: NamespaceProvider,
             override val entitlementProvider: EntitlementProvider,
+            override val accessControl: AccessControl,
             override val activationIdFactory: ActivationIdGenerator,
             override val loadBalancer: LoadBalancerService,
             override val consulServer: String,

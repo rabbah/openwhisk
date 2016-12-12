@@ -42,6 +42,7 @@ import whisk.core.entitlement._
 import whisk.core.entity._
 import whisk.core.iam.NamespaceProvider
 import whisk.core.loadBalancer.LoadBalancer
+import whisk.core.entitystore.AccessControl
 
 protected trait ControllerTestCommon
     extends FlatSpec
@@ -68,6 +69,7 @@ protected trait ControllerTestCommon
 
     override val iam = new NamespaceProvider(whiskConfig, forceLocal = true)
     override val entitlementProvider: EntitlementProvider = new LocalEntitlementProvider(whiskConfig, loadBalancer, iam)
+    val accessControl: AccessControl = new AccessControl(entityStore, entitlementProvider)
 
     override val activationIdFactory = new ActivationId.ActivationIdGenerator() {
         // need a static activation id to test activations api

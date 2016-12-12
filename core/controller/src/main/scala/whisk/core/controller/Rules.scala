@@ -32,6 +32,7 @@ import whisk.core.database.NoDocumentException
 import whisk.core.entitlement._
 import whisk.core.entity._
 import whisk.core.entity.types.EntityStore
+import whisk.core.entitystore.AccessControl
 import whisk.http.ErrorResponse.terminate
 import whisk.http.Messages._
 
@@ -55,6 +56,9 @@ trait WhiskRulesApi extends WhiskCollectionAPI with ReferencedEntities {
 
     /** Database service to CRUD rules. */
     protected val entityStore: EntityStore
+
+    /** An access control gateway for fetching resources. */
+    protected val accessControl: AccessControl
 
     /** Path to Rules REST API. */
     protected val rulesPath = "rules"
@@ -380,7 +384,7 @@ trait WhiskRulesApi extends WhiskCollectionAPI with ReferencedEntities {
                 }
             }
 
-            actionExists <- WhiskAction.resolveAction(entityStore, action) flatMap {
+            actionExists <- accessControl.resolveAction(entityStore, action) flatMap {
                 resolvedName => WhiskAction.get(entityStore, resolvedName.toDocId)
             } recoverWith {
                 case _: NoDocumentException => Future.failed {
