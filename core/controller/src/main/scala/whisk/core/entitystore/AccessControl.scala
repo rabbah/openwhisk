@@ -16,18 +16,85 @@
 
 package whisk.core.entitystore
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.util.Success
+
+import spray.http.StatusCodes._
+import spray.json.RootJsonFormat
+import whisk.common.Logging
+import whisk.common.TransactionId
+import whisk.core.controller.RejectRequest
+import whisk.core.database.ArtifactStore
+import whisk.core.database.DocumentConflictException
+import whisk.core.database.DocumentFactory
+import whisk.core.database.DocumentTypeMismatchException
+import whisk.core.database.NoDocumentException
 import whisk.core.entitlement._
 import whisk.core.entitlement.Privilege._
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext
 import whisk.core.entity._
 import whisk.core.entity.types.EntityStore
-import whisk.common.TransactionId
+import whisk.http.Messages._
 
-class AccessControl(
+protected[core] object AccessControl {
+    sealed abstract class CreateOrUpdateMode
+    case class CreateOnly() extends CreateOrUpdateMode
+    case class UpdateOnly() extends CreateOrUpdateMode
+    case class CreateOrUpdate() extends CreateOrUpdateMode
+}
+
+protected[core] class AccessControl(
     entityStore: EntityStore,
     entitlementProvider: EntitlementProvider)(
-        implicit ec: ExecutionContext) {
+        implicit ec: ExecutionContext, logger: Logging) {
+
+    import AccessControl._
+
+    private def collection[A](factory: DocumentFactory[A]): Collection = {
+        factory match {
+            case WhiskAction     => Collection(Collection.ACTIONS)
+            case WhiskActivation => Collection(Collection.ACTIVATIONS)
+            case WhiskTrigger    => Collection(Collection.TRIGGERS)
+            case WhiskRule       => Collection(Collection.RULES)
+            case WhiskPackage    => Collection(Collection.PACKAGES)
+        }
+    }
+
+    /**
+     * Checks access permissions for an entity and if permitted, fetches the entity.
+     * If access is not permitted or if the entity fetch fails, rewrite the future into
+     * an appropriate RejectRequest.
+     *
+     * @param user the subject initiating the operation
+     * @param factory the factory that can fetch entity of type A from datastore
+     * @param datastore the client to the database
+     * @param entityName the fully qualified name of the entity
+     * @return future that completes with the entity or a reason the request is rejected
+     */
+    def checkAccessAndGetEntity[A, Au >: A](
+        user: Identity,
+        factory: DocumentFactory[A],
+        datastore: ArtifactStore[Au],
+        entityName: FullyQualifiedEntityName)(
+            implicit transid: TransactionId,
+            format: RootJsonFormat[A],
+            ma: Manifest[A]) = {
+
+        val resource = Resource(entityName.path, collection(factory), Some(entityName.name.asString))
+
+        entitlementProvider.check(user, READ, resource) flatMap {
+            _ => factory.get(datastore, entityName.toDocId)
+        } recoverWith {
+            case (t: NoDocumentException) =>
+                Future.failed(RejectRequest(NotFound))
+            case (t: DocumentTypeMismatchException) =>
+                Future.failed(RejectRequest(Conflict, conformanceMessage))
+            case (t: RejectRequest) =>
+                Future.failed(t)
+            case (t: Throwable) =>
+                Future.failed(RejectRequest(InternalServerError, t.getMessage))
+        }
+    }
 
     def getAction(user: Identity, name: FullyQualifiedEntityName)(implicit transid: TransactionId): Future[WhiskAction] = {
         val resource = Resource(name.path, Collection(Collection.ACTIONS), Some(name.name.asString))

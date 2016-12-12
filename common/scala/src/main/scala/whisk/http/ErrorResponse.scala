@@ -39,6 +39,7 @@ object Messages {
      * Standard message for reporting resource conformance error when trying to access
      * a resource from a different collection.
      */
+    val entityExists = "Resource by this name already exists."
     val conformanceMessage = "Resource by this name exists but is not in this collection."
     val corruptedEntity = "Resource is corrupted and cannot be read."
 

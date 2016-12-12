@@ -167,7 +167,7 @@ class PackageActionsApiTests extends ControllerTestCommon with WhiskActionsApi {
         val content = WhiskActionPut(Some(Exec.js("??")))
         put(entityStore, binding)
         Put(s"$collectionPath/${binding.name}/$aname", content) ~> sealRoute(routes(creds)) ~> check {
-            status should be(BadRequest)
+            status should be(NotFound)
         }
     }
 
@@ -241,7 +241,7 @@ class PackageActionsApiTests extends ControllerTestCommon with WhiskActionsApi {
         val content = WhiskActionPut(Some(Exec.js("??")))
         put(entityStore, binding)
         Delete(s"$collectionPath/${binding.name}/$aname") ~> sealRoute(routes(creds)) ~> check {
-            status should be(BadRequest)
+            status should be(NotFound)
         }
     }
 

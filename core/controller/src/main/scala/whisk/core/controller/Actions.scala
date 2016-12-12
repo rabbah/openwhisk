@@ -40,7 +40,6 @@ import whisk.core.WhiskConfig
 import whisk.core.controller.actions.PostActionActivation
 import whisk.core.database.NoDocumentException
 import whisk.core.entitlement._
-import whisk.core.entitlement.Privilege._
 import whisk.core.entity._
 import whisk.core.entity.types.ActivationStore
 import whisk.core.entity.types.EntityStore
@@ -135,39 +134,31 @@ trait WhiskActionsApi
                     entityname(segment) { innername =>
                         // matched /namespace/collection/package-name/action-name
                         // this is an action in a named package
-                        val packageDocId = FullyQualifiedEntityName(ns, EntityName(outername)).toDocId
-                        val packageResource = Resource(ns, Collection(Collection.PACKAGES), Some(outername))
+                        val packageDoc = FullyQualifiedEntityName(ns, EntityName(outername))
+                        def getEntity = accessControl.checkAccessAndGetEntity(user, WhiskPackage, entityStore, packageDoc)
 
-                        val right = if (m == GET || m == POST) Privilege.READ else collection.determineRight(m, Some(innername))
-                        onComplete(entitlementProvider.check(user, right, packageResource)) {
-                            case Success(_) =>
-                                getEntity(WhiskPackage, entityStore, packageDocId, Some {
-                                    if (right == Privilege.READ) {
-                                        // need to merge package with action, hence authorize subject for package
-                                        // access (if binding, then subject must be authorized for both the binding
-                                        // and the referenced package)
-                                        //
-                                        // NOTE: it is an error if either the package or the action does not exist,
-                                        // the former manifests as unauthorized and the latter as not found
-                                        //
-                                        // a GET (READ) and POST (ACTIVATE) resolve to a READ right on the package;
-                                        // it may be desirable to separate these but currently the PACKAGES collection
-                                        // does not allow ACTIVATE since it does not make sense to activate a package
-                                        // but rather an action in the package
-                                        mergeActionWithPackageAndDispatch(m, user, EntityName(innername)) _
-                                    } else {
-                                        // these packaged action operations do not need merging with the package,
-                                        // but may not be permitted if this is a binding, or if the subject does
-                                        // not have PUT and DELETE rights to the package itself
-                                        (wp: WhiskPackage) =>
-                                            wp.binding map {
-                                                _ => terminate(BadRequest, Messages.notAllowedOnBinding)
-                                            } getOrElse {
-                                                val actionResource = Resource(wp.fullPath, collection, Some(innername))
-                                                dispatchOp(user, right, actionResource)
-                                            }
-                                    }
-                                })
+                        onComplete(getEntity) {
+                            case Success(wp: WhiskPackage) =>
+                                // need to merge package with action, hence authorize subject for package
+                                // access (if binding, then subject must be authorized for both the binding
+                                // and the referenced package)
+                                //
+                                // NOTE: it is an error if either the package or the action does not exist
+                                //
+                                // a GET (READ) and POST (ACTIVATE) resolve to a READ right on the package;
+                                // it may be desirable to separate these but currently the PACKAGES collection
+                                // does not allow ACTIVATE since it does not make sense to activate a package
+                                // but rather an action in the package
+                                //
+                                // a PUT (WRITE) or DELETE is not be permitted if this is a binding,
+                                // or if the subject does not have PUT and DELETE rights to the package itself
+                                // either of which requires the ability to GET (READ) the package
+                                if (wp.binding.isEmpty || (m != PUT && m != DELETE)) {
+                                    mergeActionWithPackageAndDispatch(m, user, EntityName(innername))(wp)
+                                } else {
+                                    terminate(BadRequest, Messages.notAllowedOnBinding)
+                                }
+
                             case Failure(f) => super.handleEntitlementFailure(f)
                         }
                     }
@@ -375,7 +366,7 @@ trait WhiskActionsApi
     }
 
     /** For a sequence action, gather referenced entities and authorize access. */
-    private def entitleReferencedEntities(user: Identity, right: Privilege, exec: Option[Exec])(
+    private def entitleReferencedEntities(user: Identity, right: Privilege.Privilege, exec: Option[Exec])(
         implicit transid: TransactionId) = {
         exec match {
             case Some(seq: SequenceExec) =>
