@@ -101,6 +101,46 @@ protected[core] class AccessControl(
         }
     }
 
+    protected[core] def checkAccessAndDeleteEntity[A <: WhiskDocument, Au >: A](
+        user: Identity,
+        factory: DocumentFactory[A],
+        datastore: ArtifactStore[Au],
+        entityName: FullyQualifiedEntityName)(
+            confirm: A => Future[Unit])(
+                implicit transid: TransactionId,
+                format: RootJsonFormat[A],
+                ma: Manifest[A]) = {
+
+        val resource = Resource(entityName.path, collection(factory), Some(entityName.name.asString))
+
+        entitlementProvider.check(user, DELETE, resource) flatMap { _ =>
+            factory.get(datastore, entityName.toDocId) flatMap { e =>
+                confirm(e) flatMap {
+                    case _ => factory.del(datastore, e.docinfo) map { _ => e }
+                }
+            }
+        } recoverWith {
+            case (t: NoDocumentException) =>
+                logger.info(this, s"[DEL] entity does not exist")
+                Future.failed(RejectRequest(NotFound))
+            case (t: DocumentConflictException) =>
+                logger.info(this, s"[DEL] entity conflict: ${t.getMessage}")
+                Future.failed(RejectRequest(Conflict, conflictMessage))
+            case (t @ RejectRequest(code, message)) =>
+                logger.info(this, s"[DEL] entity rejected with code $code: $message")
+                Future.failed(t)
+            case (t: DocumentTypeMismatchException) =>
+                logger.info(this, s"[DEL] entity conformance check failed: ${t.getMessage}")
+                Future.failed(RejectRequest(Conflict, conformanceMessage))
+            case (t: Throwable) =>
+                logger.error(this, s"[DEL] entity failed: ${t.getMessage}")
+                Future.failed(RejectRequest(InternalServerError, t.getMessage))
+        } andThen {
+            case Success(_) =>
+                logger.info(this, s"[DEL] entity success")
+        }
+    }
+
     /**
      * Creates an entity of type A in the datastore iff it doesn't already exist.
      * Assumes that if user is entitled to PUT then user is also entitled to READ.
