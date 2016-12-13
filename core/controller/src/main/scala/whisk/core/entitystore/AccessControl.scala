@@ -37,18 +37,20 @@ import whisk.core.entity.types.EntityStore
 import whisk.http.Messages._
 
 protected[core] object AccessControl {
-    sealed abstract class CreateOrUpdateMode
-    case class CreateOnly() extends CreateOrUpdateMode
-    case class UpdateOnly() extends CreateOrUpdateMode
-    case class CreateOrUpdate() extends CreateOrUpdateMode
+    sealed trait CreateOrUpdateMode
+    case object CreateOnly extends CreateOrUpdateMode
+    case object UpdateOnly extends CreateOrUpdateMode
+    case object CreateOrUpdate extends CreateOrUpdateMode
 }
 
 protected[core] class AccessControl(
     entityStore: EntityStore,
     entitlementProvider: EntitlementProvider)(
-        implicit ec: ExecutionContext, logger: Logging) {
+        implicit ec: ExecutionContext) {
 
     import AccessControl._
+
+    private val logger = entitlementProvider: Logging
 
     private def collection[A](factory: DocumentFactory[A]): Collection = {
         factory match {
@@ -71,7 +73,7 @@ protected[core] class AccessControl(
      * @param entityName the fully qualified name of the entity
      * @return future that completes with the entity or a reason the request is rejected
      */
-    def checkAccessAndGetEntity[A, Au >: A](
+    protected[core] def checkAccessAndGetEntity[A, Au >: A](
         user: Identity,
         factory: DocumentFactory[A],
         datastore: ArtifactStore[Au],
@@ -93,6 +95,70 @@ protected[core] class AccessControl(
                 Future.failed(t)
             case (t: Throwable) =>
                 Future.failed(RejectRequest(InternalServerError, t.getMessage))
+        } andThen {
+            case Success(_) =>
+                logger.info(this, s"[GET] entity success")
+        }
+    }
+
+    /**
+     * Creates an entity of type A in the datastore iff it doesn't already exist.
+     * Assumes that if user is entitled to PUT then user is also entitled to READ.
+     *
+     * @param user the subject initiating the operation
+     * @param factory the factory that can fetch entity of type A from datastore
+     * @param datastore the client to the database
+     * @param entityName the fully qualified name of the entity
+     * @param create a function Option[A] => Future[A] that creates a new entity (the PUT content, receives Some(entity) if it exists else None)
+     * @return future that complete with the newly created entity or a reason the request is rejected
+     */
+    protected[core] def checkAccessAndPutEntity[A, Au >: A](
+        user: Identity,
+        factory: DocumentFactory[A],
+        datastore: ArtifactStore[Au],
+        entityName: FullyQualifiedEntityName,
+        createOrUpdateMode: CreateOrUpdateMode)(
+            createOrUpdate: => Option[A] => Future[A])(
+                implicit transid: TransactionId,
+                format: RootJsonFormat[A],
+                ma: Manifest[A]) = {
+
+        val resource = Resource(entityName.path, collection(factory), Some(entityName.name.asString))
+
+        entitlementProvider.check(user, PUT, resource) flatMap { _ =>
+            factory.get(datastore, entityName.toDocId) flatMap { e =>
+                createOrUpdateMode match {
+                    case CreateOnly =>
+                        logger.info(this, s"[PUT] entity exists, aborting")
+                        Future.failed(RejectRequest(Conflict, entityExists))
+                    case CreateOrUpdate | UpdateOnly =>
+                        logger.info(this, s"[PUT] entity exists, will try to update '$e'")
+                        createOrUpdate(Some(e))
+                }
+            }
+        } recoverWith {
+            case _: NoDocumentException if createOrUpdateMode != UpdateOnly =>
+                logger.info(this, s"[PUT] entity does not exist, will try to create it")
+                createOrUpdate(None)
+        } flatMap { e =>
+            logger.info(this, s"[PUT] entity created, writing back to datastore")
+            factory.put(datastore, e) map { _ => e }
+        } recoverWith {
+            case (t: DocumentConflictException) =>
+                logger.info(this, s"[PUT] entity conflict: ${t.getMessage}")
+                Future.failed(RejectRequest(Conflict, conflictMessage))
+            case (t @ RejectRequest(code, message)) =>
+                logger.info(this, s"[PUT] entity rejected with code $code: $message")
+                Future.failed(t)
+            case (t: DocumentTypeMismatchException) =>
+                logger.info(this, s"[PUT] entity conformance check failed: ${t.getMessage}")
+                Future.failed(RejectRequest(Conflict, conformanceMessage))
+            case (t: Throwable) =>
+                logger.error(this, s"[PUT] entity failed: ${t.getMessage}")
+                Future.failed(RejectRequest(InternalServerError, t.getMessage))
+        } andThen {
+            case Success(_) =>
+                logger.info(this, s"[PUT] entity success")
         }
     }
 

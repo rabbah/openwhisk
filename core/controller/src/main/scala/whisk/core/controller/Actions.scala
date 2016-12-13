@@ -187,8 +187,19 @@ trait WhiskActionsApi
 
                 onComplete(entitleReferencedEntities(user, Privilege.READ, request.exec)) {
                     case Success(_) =>
-                        putEntity(WhiskAction, entityStore, entityName.toDocId, overwrite,
-                            update(user, request)_, () => { make(user, entityName, request) })
+                        def putEntity = accessControl.checkAccessAndPutEntity(
+                            user, WhiskAction, entityStore, entityName,
+                            if (overwrite) AccessControl.CreateOrUpdate else AccessControl.CreateOnly) {
+                                case None    => make(user, entityName, request)
+                                case Some(a) => update(user, request)(a)
+                            }
+
+                        onComplete(putEntity) {
+                            case Success(a)                => complete(OK, a)
+                            case Failure(t: RejectRequest) => terminate(t.code, t.message)
+                            case Failure(t)                => terminate(InternalServerError)
+                        }
+
                     case Failure(f) =>
                         super.handleEntitlementFailure(f)
                 }
