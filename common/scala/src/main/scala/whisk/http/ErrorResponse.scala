@@ -42,6 +42,7 @@ object Messages {
     val entityExists = "Resource by this name already exists."
     val conformanceMessage = "Resource by this name exists but is not in this collection."
     val corruptedEntity = "Resource is corrupted and cannot be read."
+    val updateNothing = "Resource does not exist and hence cannot be updated."
 
     val systemOverloaded = "System is overloaded, try again later."
 

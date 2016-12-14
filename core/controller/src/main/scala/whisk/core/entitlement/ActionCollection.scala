@@ -19,10 +19,12 @@ package whisk.core.entitlement
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
+import spray.http.StatusCodes.Forbidden
 import Privilege.Privilege
 import whisk.common.TransactionId
 import whisk.core.entity.Identity
 import whisk.core.entity.types.EntityStore
+import whisk.core.controller.RejectRequest
 
 class ActionCollection(entityStore: EntityStore) extends Collection(Collection.ACTIONS) {
 
@@ -38,16 +40,29 @@ class ActionCollection(entityStore: EntityStore) extends Collection(Collection.A
             name =>
                 right match {
                     // if action is in a package, check that the user is entitled to package [binding]
-                    case (Privilege.READ | Privilege.ACTIVATE) if !resource.namespace.defaultPackage =>
+                    case (Privilege.PUT | Privilege.READ | Privilege.ACTIVATE) if !resource.namespace.defaultPackage =>
                         val packageNamespace = resource.namespace.root.toPath
                         val packageName = Some(resource.namespace.last.name)
                         val packageResource = Resource(packageNamespace, Collection(Collection.PACKAGES), packageName)
-                        ep.check(user, Privilege.READ, packageResource) map { _ => true }
-                    case _ => Future.successful(isOwner && allowedEntityRights.contains(right))
+
+                        if (right == Privilege.PUT) {
+                            // only owner can write to package (hence defer to implicit check)
+                            // but also assert that package exists otherwise disallow the write
+                            super.implicitRights(user, namespaces, right, resource) flatMap {
+                                if (_) {
+                                    ep.check(user, Privilege.READ, packageResource) map { _ => true }
+                                } else {
+                                    Future.failed(RejectRequest(Forbidden))
+                                }
+                            }
+                        } else {
+                            ep.check(user, Privilege.READ, packageResource) map { _ => true }
+                        }
+
+                    case _ => super.implicitRights(user, namespaces, right, resource)
                 }
         } getOrElse {
-            // only a READ on the action collection is permitted if this is the owner of the collection
-            Future.successful(isOwner && right == Privilege.READ)
+            super.implicitRights(user, namespaces, right, resource)
         }
     }
 

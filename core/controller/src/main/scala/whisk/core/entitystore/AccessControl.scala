@@ -177,9 +177,13 @@ protected[core] class AccessControl(
                 }
             }
         } recoverWith {
-            case _: NoDocumentException if createOrUpdateMode != UpdateOnly =>
-                logger.info(this, s"[PUT] entity does not exist, will try to create it")
-                createOrUpdate(None)
+            case _: NoDocumentException =>
+                if (createOrUpdateMode != UpdateOnly) {
+                    logger.info(this, s"[PUT] entity does not exist, will try to create it")
+                    createOrUpdate(None)
+                } else {
+                    Future.failed(RejectRequest(NotFound, updateNothing))
+                }
         } flatMap { e =>
             logger.info(this, s"[PUT] entity created, writing back to datastore")
             factory.put(datastore, e) map { _ => e }
