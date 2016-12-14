@@ -60,9 +60,7 @@ trait WhiskCollectionAPI
     extends Directives
     with AuthenticatedRouteProvider
     with AuthorizedRouteProvider
-    with ValidateEntitySize
-    with ReadOps
-    with WriteOps {
+    with ValidateEntitySize {
 
     /** The core collections require backend services to be injected in this trait. */
     services: WhiskServices =>

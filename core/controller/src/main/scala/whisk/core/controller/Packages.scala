@@ -39,7 +39,7 @@ object WhiskPackagesApi {
     def requiredProperties = WhiskEntityStore.requiredProperties
 }
 
-trait WhiskPackagesApi extends WhiskCollectionAPI with ReferencedEntities {
+trait WhiskPackagesApi extends WhiskCollectionAPI with ReferencedEntities with ReadOps with WriteOps {
     services: WhiskServices =>
 
     protected override val collection = Collection(Collection.PACKAGES)

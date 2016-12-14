@@ -69,7 +69,8 @@ object WhiskActionsApi {
 trait WhiskActionsApi
     extends WhiskCollectionAPI
     with PostActionActivation
-    with ReferencedEntities {
+    with ReferencedEntities
+    with ReadOps {
     services: WhiskServices =>
 
     protected override val collection = Collection(Collection.ACTIONS)

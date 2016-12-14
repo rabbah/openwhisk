@@ -73,7 +73,7 @@ object WhiskTriggersApi {
 }
 
 /** A trait implementing the triggers API. */
-trait WhiskTriggersApi extends WhiskCollectionAPI {
+trait WhiskTriggersApi extends WhiskCollectionAPI with ReadOps with WriteOps {
     services: WhiskServices =>
 
     protected override val collection = Collection(Collection.TRIGGERS)

@@ -80,7 +80,7 @@ protected[core] class AccessControl(
         entityName: FullyQualifiedEntityName)(
             implicit transid: TransactionId,
             format: RootJsonFormat[A],
-            ma: Manifest[A]) = {
+            ma: Manifest[A]): Future[A] = {
 
         val resource = Resource(entityName.path, collection(factory), Some(entityName.name.asString))
 
@@ -109,7 +109,7 @@ protected[core] class AccessControl(
             confirm: A => Future[Unit])(
                 implicit transid: TransactionId,
                 format: RootJsonFormat[A],
-                ma: Manifest[A]) = {
+                ma: Manifest[A]): Future[A] = {
 
         val resource = Resource(entityName.path, collection(factory), Some(entityName.name.asString))
 
@@ -161,7 +161,7 @@ protected[core] class AccessControl(
             createOrUpdate: => Option[A] => Future[A])(
                 implicit transid: TransactionId,
                 format: RootJsonFormat[A],
-                ma: Manifest[A]) = {
+                ma: Manifest[A]): Future[A] = {
 
         val resource = Resource(entityName.path, collection(factory), Some(entityName.name.asString))
 

@@ -46,7 +46,7 @@ object WhiskRulesApi {
 }
 
 /** A trait implementing the rules API */
-trait WhiskRulesApi extends WhiskCollectionAPI with ReferencedEntities {
+trait WhiskRulesApi extends WhiskCollectionAPI with ReferencedEntities with ReadOps with WriteOps {
     services: WhiskServices =>
 
     protected override val collection = Collection(Collection.RULES)
