@@ -297,6 +297,10 @@
     "translation": "{{.ok}} whisk auth unset"
   },
   {
+    "id": "{{.ok}} will now require trusted SSL",
+    "translation": "{{.ok}} require trusted SSL"
+  },
+  {
     "id": "{{.ok}} whisk namespace unset",
     "translation": "{{.ok}} whisk namespace unset"
   },
@@ -327,6 +331,10 @@
   {
     "id": "whisk API host",
     "translation": "whisk API host"
+  },
+  {
+    "id": "insecure SSL",
+    "translation": "insecure SSL"
   },
   {
     "id": "whisk API version",
