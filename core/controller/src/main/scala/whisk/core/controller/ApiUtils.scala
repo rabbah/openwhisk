@@ -107,7 +107,7 @@ package object PostProcess {
 }
 
 /** A trait for REST APIs that read entities from a datastore */
-trait ReadOps extends Directives with Logging {
+trait ListOps extends Directives with Logging {
 
     /** An execution context for futures */
     protected implicit val executionContext: ExecutionContext
@@ -135,7 +135,10 @@ trait ReadOps extends Directives with Logging {
                 terminate(InternalServerError, t.getMessage)
         }
     }
+}
 
+/** A trait for REST APIs that read entities from a datastore */
+trait ReadOps extends ListOps {
     /**
      * Gets an entity of type A from datastore. Terminates HTTP request.
      *
