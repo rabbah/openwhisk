@@ -176,43 +176,6 @@ trait ReadOps extends Directives with Logging {
                 terminate(InternalServerError, t.getMessage)
         }
     }
-
-    /**
-     * Gets an entity of type A from datastore and project fields for response. Terminates HTTP request.
-     *
-     * @param factory the factory that can fetch entity of type A from datastore
-     * @param datastore the client to the database
-     * @param docid the document id to get
-     * @param project a function A => JSON which projects fields form A
-     *
-     * Responses are one of (Code, Message)
-     * - 200 project(A) as JSON
-     * - 404 Not Found
-     * - 500 Internal Server Error
-     */
-    protected def getEntityAndProject[A, Au >: A](
-        factory: DocumentFactory[A],
-        datastore: ArtifactStore[Au],
-        docid: DocId,
-        project: A => JsObject)(
-            implicit transid: TransactionId,
-            format: RootJsonFormat[A],
-            ma: Manifest[A]) = {
-        onComplete(factory.get(datastore, docid)) {
-            case Success(entity) =>
-                info(this, s"[PROJECT] entity success")
-                complete(OK, project(entity))
-            case Failure(t: NoDocumentException) =>
-                info(this, s"[PROJECT] entity does not exist")
-                terminate(NotFound)
-            case Failure(t: DocumentTypeMismatchException) =>
-                info(this, s"[PROJECT] entity conformance check failed: ${t.getMessage}")
-                terminate(Conflict, conformanceMessage)
-            case Failure(t: Throwable) =>
-                error(this, s"[PROJECT] entity failed: ${t.getMessage}")
-                terminate(InternalServerError, t.getMessage)
-        }
-    }
 }
 
 /** A trait for REST APIs that write entities to a datastore */

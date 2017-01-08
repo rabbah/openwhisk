@@ -160,8 +160,9 @@ trait WhiskActivationsApi
      * - 500 Internal Server Error
      */
     private def fetchResponse(docid: DocId)(implicit transid: TransactionId) = {
-        getEntityAndProject(WhiskActivation, activationStore, docid,
-            (activation: WhiskActivation) => activation.response.toExtendedJson)
+        getEntity(WhiskActivation, activationStore, docid, Some {
+            (activation: WhiskActivation) => complete(activation.response.toExtendedJson)
+        })
     }
 
     /**
@@ -173,8 +174,9 @@ trait WhiskActivationsApi
      * - 500 Internal Server Error
      */
     private def fetchLogs(docid: DocId)(implicit transid: TransactionId) = {
-        getEntityAndProject(WhiskActivation, activationStore, docid,
-            (activation: WhiskActivation) => activation.logs.toJsonObject)
+        getEntity(WhiskActivation, activationStore, docid, Some {
+            (activation: WhiskActivation) => complete(activation.logs.toJsonObject)
+        })
     }
 
     /** Custom deserializer for query parameters "name" into valid entity name. */
