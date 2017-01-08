@@ -70,7 +70,7 @@ class AccessControlTests
         Await.ready(f, timeout).eitherValue.get shouldBe r
     }
 
-    ignore should "not allow get access to entity in another namespace whether it exsists or not" in {
+    it should "not allow get access to entity in another namespace whether it exsists or not" in {
         testGetFromDefaultPackage()
 
         val privatePkg = WhiskPackage(someUser.namespace.toPath, EntityName("privatePkg"), publish = false)
@@ -80,7 +80,7 @@ class AccessControlTests
         testGetFromPackage(publicPkg)
     }
 
-    ignore should "not allow delete access to entity in another namespace whether it exists or not" in {
+    it should "not allow delete access to entity in another namespace whether it exists or not" in {
         testDelFromDefaultPackage()
 
         val privatePkg = WhiskPackage(someUser.namespace.toPath, EntityName("privatePkg"), publish = false)
@@ -185,7 +185,6 @@ class AccessControlTests
         check(update(guestUser, action.namespace, WhiskAction, action), Left(RejectRequest(Forbidden)))
         check(update(someUser, action.namespace, WhiskAction, action), Right(updatedAction))
 
-        // now delete it and start over
         Await.result(WhiskAction.del(entityStore, action.docinfo), timeout)
         assert(!entityStore.contains(action.docid))
     }
@@ -231,7 +230,7 @@ class AccessControlTests
         Await.result(WhiskAction.put(entityStore, pkgAction), timeout)
         assert(entityStore.contains(pkgAction.docid))
 
-        // may not delete action in public package owned by someone else
+        // not allowed to delete action in public package owned by someone else
         check(del(guestUser, pkgAction.namespace, pkgAction.name.asString, WhiskAction), Left(RejectRequest(Forbidden)))
         check(del(guestUser, pkgAction.namespace, pkgAction.name.asString, WhiskTrigger), Left(RejectRequest(Forbidden)))
 
@@ -239,8 +238,8 @@ class AccessControlTests
         // do this last since it deletes the action
         check(del(someUser, pkgAction.namespace, pkgAction.name.asString, WhiskAction), Right(pkgAction))
 
-        Await.result(WhiskAction.del(entityStore, pkg.docinfo), timeout)
         Await.result(WhiskAction.del(entityStore, pkgAction.docinfo), timeout)
+        Await.result(WhiskPackage.del(entityStore, pkg.docinfo), timeout)
         assert(entityStore.isEmpty)
     }
 
@@ -267,14 +266,14 @@ class AccessControlTests
         assert(entityStore.contains(pkgAction.docid))
 
         check(get(guestUser, pkgAction.namespace, pkgAction.name.asString, WhiskAction), if (pkg.publish) Right(pkgAction) else Left(RejectRequest(Forbidden)))
-        // because trigger/rule dare not allowed in packages and hence only the root path is checked
+        // because trigger/rule are not allowed in packages and hence only the root path is checked
         check(get(guestUser, pkgAction.namespace, pkgAction.name.asString, WhiskTrigger), Left(RejectRequest(Forbidden)))
 
         check(get(someUser, pkgAction.namespace, pkgAction.name.asString, WhiskAction), Right(pkgAction))
         check(get(someUser, pkgAction.namespace, pkgAction.name.asString, WhiskTrigger), Left(RejectRequest(Conflict, Messages.conformanceMessage)))
 
-        Await.result(WhiskAction.del(entityStore, pkg.docinfo), timeout)
         Await.result(WhiskAction.del(entityStore, pkgAction.docinfo), timeout)
+        Await.result(WhiskPackage.del(entityStore, pkg.docinfo), timeout)
         assert(entityStore.isEmpty)
     }
 
@@ -298,8 +297,8 @@ class AccessControlTests
         check(put(someUser, pkgAction.namespace, pkgAction.name.asString, WhiskAction, pkgAction), Right(pkgAction))
         assert(entityStore.contains(pkgAction.docid))
 
-        Await.result(WhiskAction.del(entityStore, pkg.docinfo), timeout)
         Await.result(WhiskAction.del(entityStore, pkgAction.docinfo), timeout)
+        Await.result(WhiskPackage.del(entityStore, pkg.docinfo), timeout)
         assert(entityStore.isEmpty)
     }
 
