@@ -94,6 +94,7 @@ protected[core] class AccessControl(
             case (t: RejectRequest) =>
                 Future.failed(t)
             case (t: Throwable) =>
+                logger.error(this, s"[GET] failed: $t")
                 Future.failed(RejectRequest(InternalServerError))
         } andThen {
             case Success(_) =>

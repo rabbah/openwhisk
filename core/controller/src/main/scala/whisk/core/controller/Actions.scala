@@ -70,7 +70,7 @@ trait WhiskActionsApi
     extends WhiskCollectionAPI
     with PostActionActivation
     with ReferencedEntities
-    with ReadOps {
+    with ListOps {
     services: WhiskServices =>
 
     protected override val collection = Collection(Collection.ACTIONS)
@@ -196,13 +196,11 @@ trait WhiskActionsApi
                             }
 
                         onComplete(putEntity) {
-                            case Success(a)                => complete(OK, a)
-                            case Failure(t: RejectRequest) => terminate(t.code, t.message)
-                            case Failure(t)                => terminate(InternalServerError)
+                            case Success(a) => complete(OK, a)
+                            case Failure(f) => super.handleEntitlementFailure(f)
                         }
 
-                    case Failure(f) =>
-                        super.handleEntitlementFailure(f)
+                    case Failure(f) => super.handleEntitlementFailure(f)
                 }
             }
         }
@@ -222,8 +220,8 @@ trait WhiskActionsApi
     override def activate(user: Identity, entityName: FullyQualifiedEntityName, env: Option[Parameters])(implicit transid: TransactionId) = {
         parameter('blocking ? false, 'result ? false) { (blocking, result) =>
             entity(as[Option[JsObject]]) { payload =>
-                getEntity(WhiskAction, entityStore, entityName.toDocId, Some {
-                    act: WhiskAction =>
+                onComplete(accessControl.checkAccessAndGetEntity(user, WhiskAction, entityStore, entityName)) {
+                    case Success(act) =>
                         // resolve the action --- special case for sequences that may contain components with '_' as default package
                         val action = act.resolve(user.namespace)
                         onComplete(entitleReferencedEntities(user, Privilege.ACTIVATE, Some(action.exec))) {
@@ -264,10 +262,11 @@ trait WhiskActionsApi
                                         terminate(InternalServerError)
                                 }
 
-                            case Failure(f) =>
-                                super.handleEntitlementFailure(f)
+                            case Failure(f) => super.handleEntitlementFailure(f)
                         }
-                })
+
+                    case Failure(f) => super.handleEntitlementFailure(f)
+                }
             }
         }
     }
@@ -287,9 +286,8 @@ trait WhiskActionsApi
         }
 
         onComplete(delEntity) {
-            case Success(a)                => complete(OK, a)
-            case Failure(t: RejectRequest) => terminate(t.code, t.message)
-            case Failure(t)                => terminate(InternalServerError)
+            case Success(a) => complete(OK, a)
+            case Failure(f) => super.handleEntitlementFailure(f)
         }
     }
 
@@ -302,10 +300,13 @@ trait WhiskActionsApi
      * - 500 Internal Server Error
      */
     override def fetch(user: Identity, entityName: FullyQualifiedEntityName, env: Option[Parameters])(implicit transid: TransactionId) = {
-        getEntity(WhiskAction, entityStore, entityName.toDocId, Some { action: WhiskAction =>
-            val mergedAction = env map { action inherit _ } getOrElse action
-            complete(OK, mergedAction)
-        })
+        onComplete(accessControl.checkAccessAndGetEntity(user, WhiskAction, entityStore, entityName)) {
+            case Success(action) =>
+                val mergedAction = env map { action inherit _ } getOrElse action
+                complete(OK, mergedAction)
+
+            case Failure(f) => super.handleEntitlementFailure(f)
+        }
     }
 
     /**
@@ -486,20 +487,23 @@ trait WhiskActionsApi
         // and should hit the cache to ameliorate the cost; this can be improved
         // but requires communicating back from the authorization service the
         // resolved namespace
-        getEntity(WhiskPackage, entityStore, pkgName.toDocId, Some { (wp: WhiskPackage) =>
-            val pkgns = wp.binding map { b =>
-                info(this, s"list actions in package binding '${wp.name}' -> '$b'")
-                b.namespace.addPath(b.name)
-            } getOrElse {
-                info(this, s"list actions in package '${wp.name}'")
-                pkgName.path.addPath(wp.name)
-            }
-            // list actions in resolved namespace
-            // NOTE: excludePrivate is false since the subject is authorize to access
-            // the package; in the future, may wish to exclude private actions in a
-            // public package instead
-            list(user, pkgns, excludePrivate = false)
-        })
+        onComplete(accessControl.checkAccessAndGetEntity(user, WhiskPackage, entityStore, pkgName)) {
+            case Success(wp) =>
+                val pkgns = wp.binding map { b =>
+                    info(this, s"list actions in package binding '${wp.name}' -> '$b'")
+                    b.namespace.addPath(b.name)
+                } getOrElse {
+                    info(this, s"list actions in package '${wp.name}'")
+                    pkgName.path.addPath(wp.name)
+                }
+                // list actions in resolved namespace
+                // NOTE: excludePrivate is false since the subject is authorized to access
+                // the package; in the future, may wish to exclude private actions in a
+                // public package instead
+                list(user, pkgns, excludePrivate = false)
+
+            case Failure(f) => super.handleEntitlementFailure(f)
+        }
     }
 
     /**
@@ -516,9 +520,10 @@ trait WhiskActionsApi
                 info(this, s"fetching package '$docid' for reference")
                 // already checked that subject is authorized for package and binding;
                 // this fetch is redundant but should hit the cache to ameliorate cost
-                getEntity(WhiskPackage, entityStore, docid, Some {
-                    mergeActionWithPackageAndDispatch(method, user, action, Some { wp }) _
-                })
+                onComplete(accessControl.checkAccessAndGetEntity(user, WhiskPackage, entityStore, b.fullyQualifiedName)) {
+                    case Success(p) => mergeActionWithPackageAndDispatch(method, user, action, Some(wp))(p)
+                    case Failure(f) => super.handleEntitlementFailure(f)
+                }
         } getOrElse {
             // a subject has implied rights to all resources in a package, so dispatch
             // operation without further entitlement checks
