@@ -132,7 +132,7 @@ trait ListOps extends Directives with Logging {
                 complete(OK, entities)
             case Failure(t: Throwable) =>
                 error(this, s"[LIST] entity failed: ${t.getMessage}")
-                terminate(InternalServerError, t.getMessage)
+                terminate(InternalServerError)
         }
     }
 }
@@ -176,7 +176,7 @@ trait ReadOps extends ListOps {
                 terminate(code, message)
             case Failure(t: Throwable) =>
                 error(this, s"[GET] entity failed: ${t.getMessage}")
-                terminate(InternalServerError, t.getMessage)
+                terminate(InternalServerError)
         }
     }
 }
@@ -264,7 +264,7 @@ trait WriteOps extends Directives with Logging {
                 terminate(Conflict, conformanceMessage)
             case Failure(t: Throwable) =>
                 error(this, s"[PUT] entity failed: ${t.getMessage}")
-                terminate(InternalServerError, t.getMessage)
+                terminate(InternalServerError)
         }
     }
 
@@ -317,7 +317,7 @@ trait WriteOps extends Directives with Logging {
                 terminate(Conflict, conformanceMessage)
             case Failure(t: Throwable) =>
                 error(this, s"[DEL] entity failed: ${t.getMessage}")
-                terminate(InternalServerError, t.getMessage)
+                terminate(InternalServerError)
         }
     }
 }

@@ -94,7 +94,7 @@ protected[core] class AccessControl(
             case (t: RejectRequest) =>
                 Future.failed(t)
             case (t: Throwable) =>
-                Future.failed(RejectRequest(InternalServerError, t.getMessage))
+                Future.failed(RejectRequest(InternalServerError))
         } andThen {
             case Success(_) =>
                 logger.info(this, s"[GET] entity success")
@@ -134,7 +134,7 @@ protected[core] class AccessControl(
                 Future.failed(RejectRequest(Conflict, conformanceMessage))
             case (t: Throwable) =>
                 logger.error(this, s"[DEL] entity failed: ${t.getMessage}")
-                Future.failed(RejectRequest(InternalServerError, t.getMessage))
+                Future.failed(RejectRequest(InternalServerError))
         } andThen {
             case Success(_) =>
                 logger.info(this, s"[DEL] entity success")
@@ -199,7 +199,7 @@ protected[core] class AccessControl(
                 Future.failed(RejectRequest(Conflict, conformanceMessage))
             case (t: Throwable) =>
                 logger.error(this, s"[PUT] entity failed: ${t.getMessage}")
-                Future.failed(RejectRequest(InternalServerError, t.getMessage))
+                Future.failed(RejectRequest(InternalServerError))
         } andThen {
             case Success(_) =>
                 logger.info(this, s"[PUT] entity success")
