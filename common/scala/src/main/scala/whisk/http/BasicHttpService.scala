@@ -52,7 +52,6 @@ import akka.event.Logging
 import whisk.common.LoggingMarkers
 import whisk.common.LogMarkerToken
 import whisk.common.LogMarker
-import whisk.common.LogMarker
 
 /**
  * This trait extends the spray HttpService trait with logging and transaction counting
