@@ -54,7 +54,7 @@ func setupClientConfig(cmd *cobra.Command, args []string) (error){
         Namespace:  Properties.Namespace,
         BaseURL:    baseURL,
         Version:    Properties.APIVersion,
-        Insecure:   flags.global.insecure,
+        Insecure:   Properties.InsecureSSL,
         Host:       Properties.APIHost,
     }
 

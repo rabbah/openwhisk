@@ -63,7 +63,7 @@ var flags struct {
         apibuildno      bool
         all             bool
         apihostSet      string
-        insecureSet     bool
+        insecureSet     string
         apiversionSet   string
         namespaceSet    string
     }

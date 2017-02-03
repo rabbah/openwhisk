@@ -1334,5 +1334,13 @@
   {
     "id": "Cannot use value '{{.arg}}' for shared.",
     "translation": "Cannot use value '{{.arg}}' for shared."
+  },
+  {
+    "id": "{{.ok}} whisk insecure unset",
+    "translation": "{{.ok}} whisk insecure unset"
+  },
+  {
+    "id": "{{.ok}} whisk insecure set to {{.insecure}}\n",
+    "translation": "{{.ok}} whisk insecure set to {{.insecure}}\n"
   }
 ]
