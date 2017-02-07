@@ -39,8 +39,9 @@ Web actions bring some additional features that include:
 1. `Content extensions`: the request must specify its desired content type as one of `.json`, `.html`, `.text` or `.http`. This is done by adding an extension to the action name in the URI, so that an action `/guest/demo/hello` is referenced as `/guest/demo/hello.html` for example to receive an HTML response back.
 1. `Projecting fields from the result`: the path that follows the action name is used to project out one or more levels of the response. For example, 
 `/guest/demo/hello.html/html`. This allows an action which returns a dictionary `{html: "..." }` to project the `html` property and directly return its string value instead. The project path follows an absolute path model (as in XPath).
-1. `Query and body parameters as input:` the action receives query parameters as well as parameters in the request body. The precedence order for merging parameters is: package parameters, action parameters, query parameter, body parameters with each of these overriding any previous values in case of overlap . As an example `/guest/demo/hello.html/html?name=Dave` will pass the argument `{name: "Dave"}` to the action.
+1. `Query and body parameters as input`: the action receives query parameters as well as parameters in the request body. The precedence order for merging parameters is: package parameters, action parameters, query parameter, body parameters with each of these overriding any previous values in case of overlap . As an example `/guest/demo/hello.html/html?name=Dave` will pass the argument `{name: "Dave"}` to the action.
 1. `Form data`: in addition to the standard `application/json`, web actions may receive URL encoded from data `application/x-www-form-urlencoded data` as input.
+1. `Activation via multiple HTTP verbs`: a web action may be invoked via one of four HTTP methods: `GET`, `POST`, `PUT` or `DELETE`.
 
 ## Handling HTTP requests with actions
 
@@ -126,7 +127,7 @@ It is worthwhile to consider generalizing the `web-export` annotation to provide
 2. `extensions`: array of supported extensions.
 3. `authentication`: one of `{"none", "builtin"}` where `none` is for anonymous access and `builtin` for OpenWhisk authentication.
 
-As in `-a web-export '{ "methods": ["get", "post"], "extensions": ["http"], "authentication": "none" }'` for a web action that only accepts `get` and `post` requests, handled `.http` extensions only, and permits anonymous access. A richer set of annotations will allow the controller to reject requests early. The current implementation will accept `get`, `post`, `put` and `delete` HTTP methods without discrimination for any web action.
+As in `-a web-export '{ "methods": ["get", "post"], "extensions": ["http"], "authentication": "none" }'` for a web action that only accepts `get` and `post` requests, handled `.http` extensions only, and permits anonymous access. A richer set of annotations will allow the controller to reject requests early if a web action does not support a particular method for example. The current implementation will accept `get`, `post`, `put` and `delete` HTTP methods without discrimination for any web action.
 
 # Meta Packages
 
