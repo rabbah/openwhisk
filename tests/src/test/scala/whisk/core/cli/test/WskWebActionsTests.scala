@@ -43,7 +43,7 @@ class WskWebActionsTestsV1 extends WskWebActionsTests {
 
 @RunWith(classOf[JUnitRunner])
 class WskWebActionsTestsV2 extends WskWebActionsTests {
-    override val testRoutePath = "/api/v2/web"
+    override val testRoutePath = "/api/v1/web"
 }
 
 abstract class WskWebActionsTests
@@ -128,7 +128,7 @@ abstract class WskWebActionsTests
             authorizedResponse.body().asString() shouldBe namespace
     }
 
-    if (testRoutePath == "/api/v2/web") {
+    if (testRoutePath == "/api/v1/web") {
         it should "ensure that CORS header is preserved" in withAssetCleaner(wskprops) {
             (wp, assetHelper) =>
                 val name = "webaction"
