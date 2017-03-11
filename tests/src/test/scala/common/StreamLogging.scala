@@ -30,6 +30,6 @@ import whisk.common.PrintStreamLogging
  */
 trait StreamLogging {
     val stream = new ByteArrayOutputStream
-    val printstream = new PrintStream(stream)
+    val printstream = new PrintStream(Console.out)
     implicit val logging: Logging = new PrintStreamLogging(printstream)
 }
