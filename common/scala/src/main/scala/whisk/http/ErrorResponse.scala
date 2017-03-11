@@ -21,7 +21,6 @@ import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
 
 import spray.http.MediaType
-import spray.http.MediaTypes
 import spray.http.StatusCode
 import spray.http.StatusCodes.Forbidden
 import spray.http.StatusCodes.NotFound
