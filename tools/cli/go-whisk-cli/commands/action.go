@@ -331,6 +331,10 @@ func parseAction(cmd *cobra.Command, args []string, update bool) (*whisk.Action,
         return nil, parseQualifiedNameError(args[0], err)
     }
 
+    if len(args) == 2 {
+        artifact = args[1]
+    }
+
     client.Namespace = qualifiedName.namespace
     action := new(whisk.Action)
     action.Name = qualifiedName.entityName
@@ -385,7 +389,7 @@ func parseAction(cmd *cobra.Command, args []string, update bool) (*whisk.Action,
         action.Exec = new(whisk.Exec)
         action.Exec.Kind = "sequence"
         action.Exec.Components = csvToQualifiedActions(artifact)
-    } else if len(args) == 2 {
+    } else if len(artifact) > 0 {
         action.Exec, err = getExec(args[1])
     }
 
