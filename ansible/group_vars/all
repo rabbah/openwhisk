@@ -1,5 +1,6 @@
 mode: deploy
 prompt_user: true
+privilege_escalation: false
 openwhisk_home: "{{ lookup('env', 'OPENWHISK_HOME')|default(playbook_dir + '/..', true) }}"
 openwhisk_cli_home: "{{ lookup('env', 'OPENWHISK_CLI') | default(openwhisk_home, true) }}"
 exclude_logs_from: []
