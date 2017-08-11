@@ -17,18 +17,20 @@
 
 package whisk.core.loadBalancer.test
 
-import org.scalatest.{ FlatSpec, Matchers }
-import whisk.core.entity.{ ActivationId, UUID, WhiskActivation }
-import whisk.core.loadBalancer.{ ActivationEntry, LoadBalancerData }
+import scala.concurrent.Promise
 
-import scala.concurrent.{ Promise }
+import org.scalatest.{ FlatSpec, Matchers }
+
+import whisk.core.controller.test.WhiskAuthHelpers
+import whisk.core.entity.{ ActivationId, WhiskActivation }
 import whisk.core.entity.InstanceId
+import whisk.core.loadBalancer.{ ActivationEntry, LoadBalancerData }
 
 class LoadBalancerDataTests extends FlatSpec with Matchers {
 
     val activationIdPromise = Promise[Either[ActivationId, WhiskActivation]]()
-    val firstEntry: ActivationEntry = ActivationEntry(ActivationId(), UUID(), InstanceId(0), activationIdPromise)
-    val secondEntry: ActivationEntry = ActivationEntry(ActivationId(), UUID(), InstanceId(1), activationIdPromise)
+    val firstEntry: ActivationEntry = ActivationEntry(ActivationId(), WhiskAuthHelpers.newIdentity(), InstanceId(0), activationIdPromise)
+    val secondEntry: ActivationEntry = ActivationEntry(ActivationId(), WhiskAuthHelpers.newIdentity(), InstanceId(1), activationIdPromise)
 
     behavior of "LoadBalancerData"
 
@@ -86,9 +88,9 @@ class LoadBalancerDataTests extends FlatSpec with Matchers {
 
     it should "respond with different values accordingly" in {
 
-        val entry = ActivationEntry(ActivationId(), UUID(), InstanceId(1), activationIdPromise)
+        val entry = ActivationEntry(ActivationId(), WhiskAuthHelpers.newIdentity(), InstanceId(1), activationIdPromise)
         val entrySameInvokerAndNamespace = entry.copy(id = ActivationId())
-        val entrySameInvoker = entry.copy(id = ActivationId(), namespaceId = UUID())
+        val entrySameInvoker = entry.copy(id = ActivationId(), user = WhiskAuthHelpers.newIdentity())
 
         val loadBalancerData = new LoadBalancerData()
         loadBalancerData.putActivation(entry.id, entry)

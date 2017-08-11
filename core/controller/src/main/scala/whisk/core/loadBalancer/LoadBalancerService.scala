@@ -18,6 +18,8 @@
 package whisk.core.loadBalancer
 
 import java.nio.charset.StandardCharsets
+
+import scala.annotation.tailrec
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -25,31 +27,48 @@ import scala.concurrent.Promise
 import scala.concurrent.duration.DurationInt
 import scala.util.Failure
 import scala.util.Success
+import scala.util.Try
+
 import org.apache.kafka.clients.producer.RecordMetadata
+
 import akka.actor.ActorRefFactory
 import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.pattern.ask
 import akka.util.Timeout
+import akka.stream.ActorMaterializer
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.HttpRequest
+import akka.http.scaladsl.model.StatusCodes._
+import akka.http.scaladsl.model.Uri.Path
+import akka.http.scaladsl.model.headers.BasicHttpCredentials
+import akka.http.scaladsl.model.Uri
+import akka.http.scaladsl.model.HttpEntity
+import akka.http.scaladsl.model.MediaTypes
+import akka.http.scaladsl.model.headers.Authorization
+import akka.http.scaladsl.model.HttpMethods.POST
+import akka.http.scaladsl.unmarshalling.Unmarshal
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import spray.json._
+import spray.json.DefaultJsonProtocol.RootJsObjectFormat
 import whisk.common.Logging
 import whisk.common.LoggingMarkers
 import whisk.common.TransactionId
 import whisk.core.WhiskConfig
 import whisk.core.WhiskConfig._
-import whisk.core.connector.MessagingProvider
 import whisk.core.connector.{ ActivationMessage, CompletionMessage }
 import whisk.core.connector.MessageFeed
 import whisk.core.connector.MessageProducer
+import whisk.core.connector.MessagingProvider
 import whisk.core.database.NoDocumentException
 import whisk.core.entity.{ ActivationId, WhiskActivation }
-import whisk.core.entity.InstanceId
+import whisk.core.entity.EntityName
 import whisk.core.entity.ExecutableWhiskAction
+import whisk.core.entity.Identity
+import whisk.core.entity.InstanceId
 import whisk.core.entity.UUID
 import whisk.core.entity.WhiskAction
 import whisk.core.entity.types.EntityStore
-import scala.annotation.tailrec
-import whisk.core.entity.EntityName
-import whisk.core.entity.Identity
 import whisk.spi.SpiLoader
 
 trait LoadBalancer {
@@ -102,7 +121,7 @@ class LoadBalancerService(
     override def publish(action: ExecutableWhiskAction, msg: ActivationMessage)(
         implicit transid: TransactionId): Future[Future[Either[ActivationId, WhiskActivation]]] = {
         chooseInvoker(msg.user, action).flatMap { invokerName =>
-            val entry = setupActivation(action, msg.activationId, msg.user.uuid, invokerName, transid)
+            val entry = setupActivation(action, msg.activationId, msg.user, invokerName, transid)
             sendActivationToInvoker(messageProducer, msg, invokerName).map { _ =>
                 entry.promise.future
             }
@@ -120,6 +139,9 @@ class LoadBalancerService(
      *
      * @param msg is the kafka message payload as Json
      */
+    private val controllerLocalUrl = Uri(s"http://localhost:${config.servicePort}")
+    private implicit val materializer = ActorMaterializer()
+
     private def processCompletion(response: Either[ActivationId, WhiskActivation], tid: TransactionId, forced: Boolean): Unit = {
         val aid = response.fold(l => l, r => r.activationId)
         loadBalancerData.removeActivation(aid) match {
@@ -130,6 +152,37 @@ class LoadBalancerService(
                 } else {
                     entry.promise.tryFailure(new Throwable("no active ack received"))
                 }
+
+                entry.notification.map {
+                    case Notification(target, asTrigger) =>
+                        val baseUri = Path("/api/v1") / "namespaces" / target.path.root.asString / asTrigger.map(_ => "triggers").getOrElse("actions")
+                        val entityName = {
+                            target.path.relativePath.map {
+                                pkg => (Path.SingleSlash + pkg.namespace) / target.name.asString
+                            } getOrElse {
+                                Path.SingleSlash + target.name.asString
+                            }
+                        }.toString
+
+                        val request = HttpRequest(
+                            method = POST,
+                            uri = controllerLocalUrl.withPath(baseUri + entityName),
+                            headers = List(Authorization(BasicHttpCredentials(entry.user.authkey.uuid.asString, entry.user.authkey.key.asString))),
+                            entity = HttpEntity(MediaTypes.`application/json`, JsObject("activationId" -> aid.toJson).compactPrint))
+
+                        Http().singleRequest(request).map { response =>
+                            response.status match {
+                                case OK | Accepted => Unmarshal(response.entity).to[JsObject].map { a =>
+                                    logging.info(this, s"${target.asString} notification id ${a.fields("activationId")}")
+                                }
+                                case NotFound =>
+                                    logging.info(this, s"${target.asString} notification failed because it does not exist")
+                                case _ => Unmarshal(response.entity).to[String].map { error =>
+                                    logging.warn(this, s"${target.asString} failed due to $error")
+                                }
+                            }
+                        }
+                }
             case None =>
                 // the entry was already removed
                 logging.debug(this, s"received active ack for '$aid' which has no entry")(tid)
@@ -139,8 +192,10 @@ class LoadBalancerService(
     /**
      * Creates an activation entry and insert into various maps.
      */
-    private def setupActivation(action: ExecutableWhiskAction, activationId: ActivationId, namespaceId: UUID, invokerName: InstanceId, transid: TransactionId): ActivationEntry = {
+    private def setupActivation(action: ExecutableWhiskAction, activationId: ActivationId, user: Identity, invokerName: InstanceId, transid: TransactionId): ActivationEntry = {
         val timeout = action.limits.timeout.duration + activeAckTimeoutGrace
+        val notification = action.annotations.get("notify").flatMap(n => Try(n.convertTo[Notification]).toOption)
+
         // Install a timeout handler for the catastrophic case where an active ack is not received at all
         // (because say an invoker is down completely, or the connection to the message bus is disrupted) or when
         // the active ack is significantly delayed (possibly dues to long queues but the subject should not be penalized);
@@ -150,7 +205,7 @@ class LoadBalancerService(
                 processCompletion(Left(activationId), transid, forced = true)
             }
 
-            ActivationEntry(activationId, namespaceId, invokerName, Promise[Either[ActivationId, WhiskActivation]]())
+            ActivationEntry(activationId, user, invokerName, Promise[Either[ActivationId, WhiskActivation]], notification)
         })
     }
 

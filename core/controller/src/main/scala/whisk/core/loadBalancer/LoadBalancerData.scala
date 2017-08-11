@@ -21,12 +21,31 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Promise
-
+import spray.json.DefaultJsonProtocol
 import whisk.core.entity.{ ActivationId, UUID, WhiskActivation }
+import whisk.core.entity.FullyQualifiedEntityName
+import whisk.core.entity.Identity
 import whisk.core.entity.InstanceId
 
 /** Encapsulates data relevant for a single activation */
-case class ActivationEntry(id: ActivationId, namespaceId: UUID, invokerName: InstanceId, promise: Promise[Either[ActivationId, WhiskActivation]])
+case class ActivationEntry(
+    id: ActivationId,
+    user: Identity,
+    invokerName: InstanceId,
+    promise: Promise[Either[ActivationId, WhiskActivation]],
+    notification: Option[Notification] = None) {
+    val namespaceId = user.uuid
+}
+
+/**
+ * Represents a callback notification when action completes.
+ */
+case class Notification(target: FullyQualifiedEntityName, trigger: Option[Boolean])
+
+object Notification extends DefaultJsonProtocol {
+    implicit val fqnSerdes = FullyQualifiedEntityName.serdes
+    implicit val serdes = jsonFormat2(Notification.apply)
+}
 
 /**
  * Encapsulates data used for loadbalancer and active-ack bookkeeping.
