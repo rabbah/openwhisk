@@ -57,8 +57,8 @@ public class JarLoader extends URLClassLoader {
         super(new URL[] { jarPath.toUri().toURL() });
 
         final String[] splittedEntrypoint = entrypoint.split("#");
-        final entrypointClassName = splittedEntrypoint[0];
-        final entrypointMethodName = splittedEntrypoint.length > 1 ? splittedEntrypoint[1] : "main";
+        final String entrypointClassName = splittedEntrypoint[0];
+        final String entrypointMethodName = splittedEntrypoint.length > 1 ? splittedEntrypoint[1] : "main";
 
         this.mainClass = loadClass(entrypointClassName);
 
