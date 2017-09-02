@@ -208,14 +208,12 @@ object WhiskAction
     with WhiskEntityQueries[WhiskAction]
     with DefaultJsonProtocol {
 
-    val execFieldName = "exec"
-    val finalParamsAnnotationName = "final"
-
+    override val cacheEnabled = true
     override val collectionName = "actions"
-
     override implicit val serdes = jsonFormat(WhiskAction.apply, "namespace", "name", "exec", "parameters", "limits", "version", "publish", "annotations")
 
-    override val cacheEnabled = true
+    val execFieldName = "exec"
+    val finalParamsAnnotationName = "final"
 
     // overriden to store attached code
     override def put[A >: WhiskAction](db: ArtifactStore[A], doc: WhiskAction)(

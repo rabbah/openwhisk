@@ -25,6 +25,10 @@ import spray.json.DefaultJsonProtocol
 import spray.json.DefaultJsonProtocol._
 import spray.json._
 import whisk.core.database.DocumentFactory
+import whisk.core.database.ArtifactStore
+import whisk.common.TransactionId
+import whisk.core.database.StaleParameter
+import WhiskActivation.instantSerdes
 
 /**
  * A WhiskActivation provides an abstraction of the meta-data
@@ -72,9 +76,22 @@ case class WhiskActivation(
 
     def toJson = WhiskActivation.serdes.write(this).asJsObject
 
+    /** This the activation summary as computed by the database view. Strictly used for testing. */
     override def summaryAsJson = {
         val JsObject(fields) = super.summaryAsJson
-        JsObject(fields + ("activationId" -> activationId.toJson))
+        def actionOrNot() = {
+            if (end != Instant.EPOCH) {
+                Map("end" -> end.toJson,
+                    "duration" -> (duration getOrElse (end.toEpochMilli - start.toEpochMilli)).toJson,
+                    "statusCode" -> response.statusCode.toJson)
+            } else Map.empty
+        }
+
+        JsObject(fields +
+            ("activationId" -> activationId.toJson) +
+            ("start" -> start.toJson) ++
+            cause.map(("cause" -> _.toJson)) ++
+            actionOrNot())
     }
 
     def resultAsJson = response.result.toJson.asJsObject
@@ -98,8 +115,9 @@ object WhiskActivation
     extends DocumentFactory[WhiskActivation]
     with WhiskEntityQueries[WhiskActivation]
     with DefaultJsonProtocol {
+    import WhiskEntityQueries._
 
-    private implicit val instantSerdes = new RootJsonFormat[Instant] {
+    protected[entity] implicit val instantSerdes = new RootJsonFormat[Instant] {
         def write(t: Instant) = t.toEpochMilli.toJson
 
         def read(value: JsValue) = Try {
@@ -111,10 +129,55 @@ object WhiskActivation
         } getOrElse deserializationError("timetsamp malformed 2")
     }
 
-    override val collectionName = "activations"
-    override implicit val serdes = jsonFormat13(WhiskActivation.apply)
-
     // Caching activations doesn't make much sense in the common case as usually,
     // an activation is only asked for once.
     override val cacheEnabled = false
+
+    override val collectionName = "activations"
+    override val entityKeyPrefix = ""
+    override implicit val serdes = jsonFormat13(WhiskActivation.apply)
+
+    /**
+     * Dispatches the query to the corresponding view.
+     * The keys for each of these queries are [ namespace, date, id ]
+     * where id is either a name or an activation id. Since the name
+     * and activation id can collide, there are two distinct views.
+     */
+    def listCollectionInNamespaceWithCausality(
+        db: ArtifactStore[WhiskActivation],
+        namespace: EntityPath,
+        skip: Int,
+        limit: Int,
+        docs: Boolean = false,
+        since: Option[Instant] = None,
+        upto: Option[Instant] = None,
+        cause: Option[ActivationId] = None,
+        stale: StaleParameter = StaleParameter.No)(
+            implicit transid: TransactionId) = {
+        if (cause.isEmpty) {
+            listCollectionInNamespace(db, namespace, skip, limit, docs, since, upto, stale = stale)
+        } else {
+            val convert = if (docs) Some((o: JsObject) => Try { serdes.read(o) }) else None
+            val startKey = Seq(namespace.asString) ++ Seq(since.map(_.toEpochMilli).getOrElse(0)) ++ cause.map(_.asString)
+            val endKey = Seq(namespace.asString) ++ Seq(upto.map(_.toEpochMilli).getOrElse(TOP)) ++ cause.map(_.asString) ++ Seq(TOP)
+            query(db, s"$collectionName-cause", startKey.toList, endKey.toList, skip, limit, reduce = false, stale, convert)
+        }
+    }
+
+    def listCollectionByName[A <: WhiskEntity, T](
+        db: ArtifactStore[A],
+        namespace: EntityPath,
+        name: EntityName,
+        skip: Int,
+        limit: Int,
+        docs: Boolean = false,
+        since: Option[Instant] = None,
+        upto: Option[Instant] = None,
+        stale: StaleParameter = StaleParameter.No)(
+            implicit transid: TransactionId) = {
+        val convert = if (docs) Some((o: JsObject) => Try { serdes.read(o) }) else None
+        val startKey = List(namespace.addPath(name).asString, since map { _.toEpochMilli } getOrElse 0)
+        val endKey = List(namespace.addPath(name).asString, upto map { _.toEpochMilli } getOrElse TOP, TOP)
+        query(db, collectionName, startKey, endKey, skip, limit, reduce = false, stale, convert)
+    }
 }

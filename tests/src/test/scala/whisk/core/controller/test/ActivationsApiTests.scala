@@ -58,23 +58,25 @@ class ActivationsApiTests extends ControllerTestCommon with WhiskActivationsApi 
     val creds = WhiskAuthHelpers.newIdentity()
     val namespace = EntityPath(creds.subject.asString)
     val collectionPath = s"/${EntityPath.DEFAULT}/${collection.path}"
-    def aname = MakeName.next("activations_tests")
+    def aname() = MakeName.next("activations_tests")
 
     //// GET /activations
     it should "get summary activation by namespace" in {
         implicit val tid = transid()
         // create two sets of activation records, and check that only one set is served back
         val creds1 = WhiskAuthHelpers.newAuth()
-        (1 to 2).map { i =>
-            WhiskActivation(EntityPath(creds1.subject.asString), aname, creds1.subject, ActivationId(), start = Instant.now, end = Instant.now)
-        } foreach { put(entityStore, _) }
+        (1 to 2).foreach { _ =>
+            val a = WhiskActivation(EntityPath(creds1.subject.asString), aname(), creds1.subject, ActivationId(), start = Instant.now, end = Instant.now)
+            put(activationStore, a)
+        }
 
-        val actionName = aname
-        val activations = (1 to 2).map { i =>
+        val actionName = aname()
+        val activations = (1 to 2).map { _ =>
             WhiskActivation(namespace, actionName, creds.subject, ActivationId(), start = Instant.now, end = Instant.now)
         }.toList
         activations foreach { put(activationStore, _) }
         waitOnView(activationStore, namespace, 2)
+
         whisk.utils.retry {
             Get(s"$collectionPath") ~> Route.seal(routes(creds)) ~> check {
                 status should be(OK)
@@ -110,12 +112,13 @@ class ActivationsApiTests extends ControllerTestCommon with WhiskActivationsApi 
         implicit val tid = transid()
         // create two sets of activation records, and check that only one set is served back
         val creds1 = WhiskAuthHelpers.newAuth()
-        (1 to 2).map { i =>
-            WhiskActivation(EntityPath(creds1.subject.asString), aname, creds1.subject, ActivationId(), start = Instant.now, end = Instant.now)
-        } foreach { put(entityStore, _) }
+        (1 to 2).foreach { _ =>
+            val a = WhiskActivation(EntityPath(creds1.subject.asString), aname(), creds1.subject, ActivationId(), start = Instant.now, end = Instant.now)
+            put(activationStore, a)
+        }
 
-        val actionName = aname
-        val activations = (1 to 2).map { i =>
+        val actionName = aname()
+        val activations = (1 to 2).map { _ =>
             WhiskActivation(namespace, actionName, creds.subject, ActivationId(), start = Instant.now, end = Instant.now, response = ActivationResponse.success(Some(JsNumber(5))))
         }.toList
         activations foreach { put(activationStore, _) }
@@ -136,11 +139,12 @@ class ActivationsApiTests extends ControllerTestCommon with WhiskActivationsApi 
         implicit val tid = transid()
         // create two sets of activation records, and check that only one set is served back
         val creds1 = WhiskAuthHelpers.newAuth()
-        (1 to 2).map { i =>
-            WhiskActivation(EntityPath(creds1.subject.asString), aname, creds1.subject, ActivationId(), start = Instant.now, end = Instant.now)
-        } foreach { put(activationStore, _) }
+        (1 to 2).foreach { _ =>
+            val a = WhiskActivation(EntityPath(creds1.subject.asString), aname(), creds1.subject, ActivationId(), start = Instant.now, end = Instant.now)
+            put(activationStore, a)
+        }
 
-        val actionName = aname
+        val actionName = aname()
         val now = Instant.now(Clock.systemUTC())
         val since = now.plusSeconds(10)
         val upto = now.plusSeconds(30)
@@ -199,11 +203,12 @@ class ActivationsApiTests extends ControllerTestCommon with WhiskActivationsApi 
 
         // create two sets of activation records, and check that only one set is served back
         val creds1 = WhiskAuthHelpers.newAuth()
-        (1 to 2).map { i =>
-            WhiskActivation(EntityPath(creds1.subject.asString), aname, creds1.subject, ActivationId(), start = Instant.now, end = Instant.now)
-        } foreach { put(activationStore, _) }
+        (1 to 2).foreach { _ =>
+            val a = WhiskActivation(EntityPath(creds1.subject.asString), aname(), creds1.subject, ActivationId(), start = Instant.now, end = Instant.now)
+            put(activationStore, a)
+        }
 
-        val activations = (1 to 2).map { i =>
+        val activations = (1 to 2).map { _ =>
             WhiskActivation(namespace, EntityName(s"xyz"), creds.subject, ActivationId(), start = Instant.now, end = Instant.now)
         }.toList
         activations foreach { put(activationStore, _) }
@@ -214,6 +219,38 @@ class ActivationsApiTests extends ControllerTestCommon with WhiskActivationsApi 
                 status should be(OK)
                 val response = responseAs[List[JsObject]]
                 activations.length should be(response.length)
+                activations forall { a => response contains a.summaryAsJson } should be(true)
+            }
+        }
+    }
+
+    //// GET /activations?cause=id
+    it should "get summary activation by namespace and cause" in {
+        implicit val tid = transid()
+
+        // create two sets of activation records, and check that only one set is served back
+        val creds1 = WhiskAuthHelpers.newAuth()
+        val causedBy1 = ActivationId()
+        val causedBy2 = ActivationId()
+        (1 to 2).foreach { _ =>
+            val a = WhiskActivation(EntityPath(creds1.subject.asString), aname(), creds1.subject, ActivationId(), start = Instant.now, end = Instant.now, Some(causedBy1))
+            put(activationStore, a)
+        }
+
+        // 5 activations in namespace, 2 caused by one, 2 more caused by another, and one with no cause
+        val activations = (1 to 5).map { i =>
+            val c = if (i % 2 == 0) Some(causedBy1) else if (i != 5) Some(causedBy2) else None
+            WhiskActivation(namespace, aname(), creds.subject, ActivationId(), start = Instant.now, end = Instant.now, cause = c)
+        }.toList
+        activations foreach { put(activationStore, _) }
+        waitOnView(activationStore, namespace, 5)
+
+        /*whisk.utils.retry*/ {
+            val theCause = causedBy1
+            Get(s"$collectionPath?cause=${theCause.asString}") ~> Route.seal(routes(creds)) ~> check {
+                status should be(OK)
+                val response = responseAs[List[JsObject]]
+                activations.filter(_.cause == Some(theCause)).length should be(response.length)
                 activations forall { a => response contains a.summaryAsJson } should be(true)
             }
         }
@@ -249,7 +286,7 @@ class ActivationsApiTests extends ControllerTestCommon with WhiskActivationsApi 
     //// GET /activations/id
     it should "get activation by id" in {
         implicit val tid = transid()
-        val activation = WhiskActivation(namespace, aname, creds.subject, ActivationId(), start = Instant.now, end = Instant.now)
+        val activation = WhiskActivation(namespace, aname(), creds.subject, ActivationId(), start = Instant.now, end = Instant.now)
         put(activationStore, activation)
 
         Get(s"$collectionPath/${activation.activationId.asString}") ~> Route.seal(routes(creds)) ~> check {
@@ -275,7 +312,7 @@ class ActivationsApiTests extends ControllerTestCommon with WhiskActivationsApi 
     //// GET /activations/id/result
     it should "get activation result by id" in {
         implicit val tid = transid()
-        val activation = WhiskActivation(namespace, aname, creds.subject, ActivationId(), start = Instant.now, end = Instant.now)
+        val activation = WhiskActivation(namespace, aname(), creds.subject, ActivationId(), start = Instant.now, end = Instant.now)
         put(activationStore, activation)
 
         Get(s"$collectionPath/${activation.activationId.asString}/result") ~> Route.seal(routes(creds)) ~> check {
@@ -288,7 +325,7 @@ class ActivationsApiTests extends ControllerTestCommon with WhiskActivationsApi 
     //// GET /activations/id/logs
     it should "get activation logs by id" in {
         implicit val tid = transid()
-        val activation = WhiskActivation(namespace, aname, creds.subject, ActivationId(), start = Instant.now, end = Instant.now)
+        val activation = WhiskActivation(namespace, aname(), creds.subject, ActivationId(), start = Instant.now, end = Instant.now)
         put(activationStore, activation)
 
         Get(s"$collectionPath/${activation.activationId.asString}/logs") ~> Route.seal(routes(creds)) ~> check {
@@ -301,8 +338,8 @@ class ActivationsApiTests extends ControllerTestCommon with WhiskActivationsApi 
     //// GET /activations/id/bogus
     it should "reject request to get invalid activation resource" in {
         implicit val tid = transid()
-        val activation = WhiskActivation(namespace, aname, creds.subject, ActivationId(), start = Instant.now, end = Instant.now)
-        put(entityStore, activation)
+        val activation = WhiskActivation(namespace, aname(), creds.subject, ActivationId(), start = Instant.now, end = Instant.now)
+        put(activationStore, activation)
 
         Get(s"$collectionPath/${activation.activationId.asString}/bogus") ~> Route.seal(routes(creds)) ~> check {
             status should be(NotFound)

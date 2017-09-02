@@ -1,12 +1,12 @@
 {
   "_id": "_design/whisks",
+  "language": "javascript",
   "views": {
-    "all": {
-      "map": "function (doc) {\n  var PATHSEP = \"/\";\n  var isActivation = function (doc) { return (doc.activationId !== undefined) };\n  var collection = function (doc) {\n    if (isActivation(doc)) return \"activations\";\n    return \"??\";\n  };\n\n  if (isActivation(doc)) try {\n    var ns = doc.namespace.split(PATHSEP);\n    var root = ns[0]; ns.shift();\n    var type = collection(doc);\n    var date = new Date(doc.start || doc.updated);\n    var value = {collection: type, namespace: doc.namespace, name: doc.name, version: doc.version, publish: doc.publish, annotations: doc.annotations};\n    value.activationId = doc.activationId;\n    emit([root, date], value);\n  } catch (e) {}\n}\n"
-    },
     "activations": {
-      "map": "function (doc) {\n  var PATHSEP = \"/\";\n  var isActivation = function (doc) { return (doc.activationId !== undefined) };\n\n  if (isActivation(doc)) try {\n    var date = new Date(doc.start || doc.updated);\n    emit([doc.namespace, date.getTime(), doc.name], {namespace: doc.namespace, name: doc.name, version: doc.version, publish: doc.publish, annotations: doc.annotations, activationId: doc.activationId});\n    emit([doc.namespace+PATHSEP+doc.name, date.getTime()], {namespace: doc.namespace, name: doc.name, version: doc.version, publish: doc.publish, annotations: doc.annotations, activationId: doc.activationId});\n  } catch (e) {}\n}\n"
+      "map": "function (doc) {\n  var PATHSEP = \"/\";\n  var isActivation = function (doc) { return (doc.activationId !== undefined) };\n  var summarize = function (doc) {\n    var endtime = doc.end !== 0 ? doc.end : undefined;\n    return {\n        namespace: doc.namespace,\n        name: doc.name,\n        version: doc.version,\n        publish: doc.publish,\n        annotations: doc.annotations,\n        activationId: doc.activationId,\n        start: doc.start,\n        end: endtime,\n        duration: endtime !== undefined ? doc.start - endtime : undefined,\n        cause: doc.cause,\n        statusCode: (doc.response !== undefined && doc.response.statusCode !== undefined) ? doc.response.statusCode : undefined\n      }\n  };\n\n  if (isActivation(doc)) try {\n    var date = new Date(doc.start || doc.updated);\n    emit([\"all\"+PATHSEP+doc.namespace, date.getTime()], summarize(doc));\n    emit([doc.namespace, date.getTime()], summarize(doc));\n    emit([doc.namespace+PATHSEP+doc.name, date.getTime()], summarize(doc));\n  } catch (e) {}\n}\n"
+    },
+    "activations-cause": {
+      "map": "function (doc) {\n  var PATHSEP = \"/\";\n  var isActivation = function (doc) { return (doc.activationId !== undefined) };\n  var summarize = function (doc) {\n    var endtime = doc.end !== 0 ? doc.end : undefined;\n    return {\n        namespace: doc.namespace,\n        name: doc.name,\n        version: doc.version,\n        publish: doc.publish,\n        annotations: doc.annotations,\n        activationId: doc.activationId,\n        start: doc.start,\n        end: endtime,\n        duration: endtime !== undefined ? doc.start - endtime : undefined,\n        cause: doc.cause,\n        statusCode: (endtime !== undefined && doc.response !== undefined && doc.response.statusCode !== undefined) ? doc.response.statusCode : undefined\n      }\n  };\n  \n  if (isActivation(doc)) try {\n    var date = new Date(doc.start || doc.updated);\n    if (doc.cause !== undefined) {\n      emit([doc.namespace+PATHSEP+doc.cause, date.getTime()], summarize(doc));\n    }\n  } catch (e) {}\n}\n"
     }
-  },
-  "language": "javascript"
+  }
 }

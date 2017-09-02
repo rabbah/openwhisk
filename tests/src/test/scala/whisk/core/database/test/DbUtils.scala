@@ -66,7 +66,7 @@ trait DbUtils extends TransactionCounter {
     /**
      * Retry an operation 'step()' awaiting its result up to 'timeout'.
      * Attempt the operation up to 'count' times. The future from the
-     * step is not aborted --- TODO fix this.
+     * step is not aborted.
      */
     def retry[T](step: () => Future[T], timeout: Duration, count: Int = 5): Try[T] = {
         val future = step()
@@ -98,14 +98,16 @@ trait DbUtils extends TransactionCounter {
     def waitOnView[Au](db: ArtifactStore[Au], namespace: EntityPath, count: Int)(
         implicit context: ExecutionContext, transid: TransactionId, timeout: Duration) = {
         val success = retry(() => {
-            val startKey = List(namespace.toString)
-            val endKey = List(namespace.toString, WhiskEntityQueries.TOP)
-            db.query(WhiskEntityQueries.viewname(WhiskEntityQueries.ALL), startKey, endKey, 0, 0, false, true, false, StaleParameter.No) map { l =>
+            val startKey = List("all/"+namespace.toString)
+            val endKey = List("all/"+namespace.toString, WhiskEntityQueries.TOP)
+            db.query(WhiskEntityQueries.STANDARD_VIEW, startKey, endKey, 0, 0, false, true, false, StaleParameter.No) map { l =>
                 if (l.length != count) {
                     throw RetryOp()
                 } else true
             }
         }, timeout)
+        println("failed, pausing")
+        Thread.sleep(10.minutes.toMillis)
         assert(success.isSuccess, "wait aborted")
     }
 
@@ -214,7 +216,7 @@ trait DbUtils extends TransactionCounter {
      * Deletes all documents added to gc queue.
      */
     def cleanup()(implicit timeout: Duration = 10 seconds) = {
-        docsToDelete.map { e => Try(Await.result(e._1.del(e._2)(TransactionId.testing), timeout)) }
+        //docsToDelete.map { e => Try(Await.result(e._1.del(e._2)(TransactionId.testing), timeout)) }
         docsToDelete.clear()
     }
 }

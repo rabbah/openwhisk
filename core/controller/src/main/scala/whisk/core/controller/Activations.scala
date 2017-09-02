@@ -116,8 +116,15 @@ trait WhiskActivationsApi
      * - 500 Internal Server Error
      */
     private def list(namespace: EntityPath)(implicit transid: TransactionId) = {
-        parameter('skip ? 0, 'limit ? collection.listLimit, 'count ? false, 'docs ? false, 'name.as[EntityName]?, 'since.as[Instant]?, 'upto.as[Instant]?) {
-            (skip, limit, count, docs, name, since, upto) =>
+        parameter(
+            'skip ? 0,
+            'limit ? collection.listLimit,
+            'count ? false,
+            'docs ? false,
+            'name.as[EntityName]?,
+            'since.as[Instant]?,
+            'upto.as[Instant]?,
+            'cause.as[ActivationId]?) { (skip, limit, count, docs, name, since, upto, cause) =>
                 val cappedLimit = if (limit == 0) WhiskActivationsApi.maxActivationLimit else limit
 
                 // regardless of limit, cap at maxActivationLimit (200) records, client must paginate
@@ -126,22 +133,16 @@ trait WhiskActivationsApi
                         case Some(action) =>
                             WhiskActivation.listCollectionByName(activationStore, namespace, action, skip, cappedLimit, docs, since, upto, StaleParameter.UpdateAfter)
                         case None =>
-                            WhiskActivation.listCollectionInNamespace(activationStore, namespace, skip, cappedLimit, docs, since, upto, StaleParameter.UpdateAfter)
+                            WhiskActivation.listCollectionInNamespaceWithCausality(activationStore, namespace, skip, cappedLimit, docs, since, upto, cause, StaleParameter.UpdateAfter)
                     }
 
                     listEntities {
-                        activations map {
-                            l =>
-                                if (docs) l.right.get map {
-                                    _.toExtendedJson
-                                }
-                                else l.left.get
-                        }
+                        activations map (_.fold((js) => js, (wa) => wa.map(_.toExtendedJson)))
                     }
                 } else {
                     terminate(BadRequest, Messages.maxActivationLimitExceeded(limit, WhiskActivationsApi.maxActivationLimit))
                 }
-        }
+            }
     }
 
     /**
@@ -157,9 +158,11 @@ trait WhiskActivationsApi
         pathEndOrSingleSlash {
             getEntity(WhiskActivation, activationStore, docid, postProcess = Some((activation: WhiskActivation) =>
                 complete(activation.toExtendedJson)))
-
-        } ~ (pathPrefix(resultPath) & pathEnd) { fetchResponse(docid) } ~
-            (pathPrefix(logsPath) & pathEnd) { fetchLogs(docid) }
+        } ~ (pathPrefix(resultPath) & pathEnd) {
+            fetchResponse(docid)
+        } ~ (pathPrefix(logsPath) & pathEnd) {
+            fetchLogs(docid)
+        }
     }
 
     /**
@@ -189,29 +192,41 @@ trait WhiskActivationsApi
     }
 
     /** Custom unmarshaller for query parameters "name" into valid entity name. */
-    private implicit val stringToEntityName: Unmarshaller[String, EntityName] =
+    private implicit val stringToEntityName: Unmarshaller[String, EntityName] = {
         Unmarshaller.strict[String, EntityName] { value =>
             Try { EntityName(value) } match {
                 case Success(e) => e
                 case Failure(t) => throw new IllegalArgumentException(Messages.badEntityName(value))
             }
         }
+    }
 
+    /** Custom unmarshaller for query parameters "activation id". */
+    private implicit val stringToActivationId: Unmarshaller[String, ActivationId] = {
+        Unmarshaller.strict[String, ActivationId] { value =>
+            Try { ActivationId(value) } match {
+                case Success(e) => e
+                case Failure(t) => throw new IllegalArgumentException(Messages.activationIdIllegal)
+            }
+        }
+    }
     /** Custom unmarshaller for query parameters "name" into valid namespace. */
-    private implicit val stringToNamespace: Unmarshaller[String, EntityPath] =
+    private implicit val stringToNamespace: Unmarshaller[String, EntityPath] = {
         Unmarshaller.strict[String, EntityPath] { value =>
             Try { EntityPath(value) } match {
                 case Success(e) => e
                 case Failure(t) => throw new IllegalArgumentException(Messages.badNamespace(value))
             }
         }
+    }
 
     /** Custom unmarshaller for query parameters "since" and "upto" into a valid Instant. */
-    private implicit val stringToInstantDeserializer: Unmarshaller[String, Instant] =
+    private implicit val stringToInstantDeserializer: Unmarshaller[String, Instant] = {
         Unmarshaller.strict[String, Instant] { value =>
             Try { Instant.ofEpochMilli(value.toLong) } match {
                 case Success(e) => e
                 case Failure(t) => throw new IllegalArgumentException(Messages.badEpoch(value))
             }
         }
+    }
 }

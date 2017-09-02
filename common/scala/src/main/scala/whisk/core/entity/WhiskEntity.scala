@@ -81,7 +81,8 @@ abstract class WhiskEntity protected[entity] (en: EntityName) extends WhiskDocum
 
     /**
      * A JSON view of the entity, that should match the result returned in a list operation.
-     * This should be synchronized with the views computed in wipeTransientDBs.sh.
+     * This should be synchronized with the views computed in the datastore. This needs
+     * to move to a testing package. Strictly used for testing.
      */
     def summaryAsJson = JsObject(
         "namespace" -> namespace.toJson,

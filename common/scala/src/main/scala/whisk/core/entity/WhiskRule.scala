@@ -200,6 +200,7 @@ object WhiskRule
     with WhiskEntityQueries[WhiskRule]
     with DefaultJsonProtocol {
 
+    override val cacheEnabled = false
     override val collectionName = "rules"
 
     private implicit val fqnSerdes = FullyQualifiedEntityName.serdes
@@ -231,8 +232,6 @@ object WhiskRule
             case Failure(t) => deserializationError(t.getMessage)
         }
     }
-
-    override val cacheEnabled = false
 }
 
 object WhiskRuleResponse extends DefaultJsonProtocol {

@@ -28,6 +28,9 @@ import spray.json._
 import whisk.common.TransactionId
 import whisk.core.database.DocumentFactory
 import whisk.core.entity.types.EntityStore
+import whisk.core.database.ArtifactStore
+import java.time.Instant
+import whisk.core.database.StaleParameter
 
 /**
  * WhiskPackagePut is a restricted WhiskPackage view that eschews properties
@@ -135,6 +138,7 @@ case class WhiskPackage(
 
     def toJson = WhiskPackage.serdes.write(this).asJsObject
 
+    /** This the package summary as computed by the database view. Strictly used for testing. */
     override def summaryAsJson = {
         val JsObject(fields) = super.summaryAsJson
         JsObject(fields + (WhiskPackage.bindingFieldName -> binding.isDefined.toJson))
@@ -158,8 +162,9 @@ object WhiskPackage
     with WhiskEntityQueries[WhiskPackage]
     with DefaultJsonProtocol {
 
-    val bindingFieldName = "binding"
+    override val cacheEnabled = true
     override val collectionName = "packages"
+    val bindingFieldName = "binding"
 
     /**
      * Traverses a binding recursively to find the root package and
@@ -196,8 +201,6 @@ object WhiskPackage
         }
         jsonFormat7(WhiskPackage.apply)
     }
-
-    override val cacheEnabled = true
 }
 
 /**
