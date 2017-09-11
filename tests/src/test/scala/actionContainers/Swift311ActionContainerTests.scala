@@ -104,17 +104,6 @@ class Swift311ActionContainerTests extends BasicActionRunnerTests with WskActorS
 
   behavior of swiftContainerImageName
 
-  // remove this test: it will not even compile under Swift 3 anymore
-  // so it should not be possible to write an action that does not return
-  // a [String:Any]
-  /*testNotReturningJson(
-        """
-        |func main(args: [String: Any]) -> String {
-        |    return "not a json object"
-        |}
-        """.stripMargin)
-   */
-
   testEcho(Seq {
     (
       "swift",
@@ -170,6 +159,23 @@ class Swift311ActionContainerTests extends BasicActionRunnerTests with WskActorS
 
       val (_, runRes) = c.run(runPayload(JsObject()))
       runRes.get.fields.get("result") shouldBe Some(JsString("it works"))
+    }
+  }
+
+  it should "receive a large (1MB) argument" in {
+    withActionContainer() { c =>
+      val code = """
+                | func main(args: [String: Any]) -> [String: Any] {
+                |     return args
+                | }
+                |""".stripMargin
+
+      val (initCode, initRes) = c.init(initPayload(code))
+      initCode should be(200)
+
+      val arg = JsObject("arg" -> JsString(("a" * 198144)))
+      val (_, runRes) = c.run(runPayload(arg))
+      runRes.get shouldBe arg
     }
   }
 
