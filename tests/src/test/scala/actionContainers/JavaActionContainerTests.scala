@@ -139,19 +139,21 @@ class JavaActionContainerTests extends FlatSpec with Matchers with WskActorSyste
                     |         response.addProperty("greeting", "Hello " + name + "!");
                     |         return response;
                     |     }
+                    |     public static JsonObject main(JsonObject args) {
+                    |         String name = args.getAsJsonPrimitive("name").getAsString();
+                    |         JsonObject response = new JsonObject();
+                    |         response.addProperty("error", "Oh no " + name + "!");
+                    |         return response;
+                    |     }
                     | }
                 """.stripMargin.trim)
 
       val (initCode, _) = c.init(initPayload("example.HelloWhisk#hello", jar))
       initCode should be(200)
 
-      val (runCode1, out1) = c.run(runPayload(JsObject("name" -> JsString("Whisk"))))
-      runCode1 should be(200)
-      out1 should be(Some(JsObject("greeting" -> JsString("Hello Whisk!"))))
-
-      val (runCode2, out2) = c.run(runPayload(JsObject("name" -> JsString("ksihW"))))
-      runCode2 should be(200)
-      out2 should be(Some(JsObject("greeting" -> JsString("Hello ksihW!"))))
+      val (runCode, out) = c.run(runPayload(JsObject("name" -> JsString("Whisk"))))
+      runCode should be(200)
+      out should be(Some(JsObject("greeting" -> JsString("Hello Whisk!"))))
     }
 
     out.trim shouldBe empty
