@@ -120,6 +120,36 @@ class JavaActionContainerTests extends FlatSpec with Matchers with WskActorSyste
       out2 should be(Some(JsObject("greeting" -> JsString("Hello ksihW!"))))
     }
 
+  it should "support valid actions with non 'main' names" in {
+    val (out, err) = withJavaContainer { c =>
+      val jar = JarBuilder.mkBase64Jar(
+        Seq("example", "HelloWhisk.java") -> """
+                    | package example;
+                    |
+                    | import com.google.gson.JsonObject;
+                    |
+                    | public class HelloWhisk {
+                    |     public static JsonObject hello(JsonObject args) {
+                    |         String name = args.getAsJsonPrimitive("name").getAsString();
+                    |         JsonObject response = new JsonObject();
+                    |         response.addProperty("greeting", "Hello " + name + "!");
+                    |         return response;
+                    |     }
+                    | }
+            """.stripMargin.trim)
+
+      val (initCode, _) = c.init(initPayload("example.HelloWhisk#hello", jar))
+      initCode should be(200)
+
+      val (runCode1, out1) = c.run(runPayload(JsObject("name" -> JsString("Whisk"))))
+      runCode1 should be(200)
+      out1 should be(Some(JsObject("greeting" -> JsString("Hello Whisk!"))))
+
+      val (runCode2, out2) = c.run(runPayload(JsObject("name" -> JsString("ksihW"))))
+      runCode2 should be(200)
+      out2 should be(Some(JsObject("greeting" -> JsString("Hello ksihW!"))))
+    }
+
     out.trim shouldBe empty
     err.trim shouldBe empty
   }
