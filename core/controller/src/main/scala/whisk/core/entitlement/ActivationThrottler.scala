@@ -17,16 +17,11 @@
 
 package whisk.core.entitlement
 
-import scala.concurrent.Future
-import scala.concurrent.duration.DurationInt
-
-import akka.actor.ActorSystem
 import whisk.common.Logging
-import whisk.common.Scheduler
 import whisk.common.TransactionId
 import whisk.core.entity.Identity
-import whisk.core.entity.UUID
 import whisk.core.loadBalancer.LoadBalancer
+import whisk.http.Messages
 
 /**
  * Determines user limits and activation counts as seen by the invoker and the loadbalancer
@@ -39,43 +34,44 @@ import whisk.core.loadBalancer.LoadBalancer
  * @param systemOverloadLimit the limit when the system is considered overloaded
  */
 class ActivationThrottler(loadBalancer: LoadBalancer, defaultConcurrencyLimit: Int, systemOverloadLimit: Int)(
-    implicit val system: ActorSystem, logging: Logging) {
+  implicit logging: Logging) {
 
-    logging.info(this, s"concurrencyLimit = $defaultConcurrencyLimit, systemOverloadLimit = $systemOverloadLimit")
+  logging.info(this, s"concurrencyLimit = $defaultConcurrencyLimit, systemOverloadLimit = $systemOverloadLimit")(
+    TransactionId.controller)
 
-    implicit private val executionContext = system.dispatcher
+  /**
+   * Checks whether the operation should be allowed to proceed.
+   */
+  def check(user: Identity)(implicit tid: TransactionId): RateLimit = {
+    val concurrentActivations = loadBalancer.activeActivationsFor(user.uuid)
+    val concurrencyLimit = user.limits.concurrentInvocations.getOrElse(defaultConcurrencyLimit)
+    logging.info(
+      this,
+      s"namespace = ${user.uuid.asString}, concurrent activations = $concurrentActivations, limit = $concurrencyLimit")
+    ConcurrentRateLimit(concurrentActivations, concurrencyLimit)
+  }
 
-    /**
-     * holds the values of the last run of the scheduler below to be gettable by outside
-     * services to be able to determine whether a namespace should be throttled or not based on
-     * the number of concurrent invocations it has in the system
-     */
-    @volatile
-    private var namespaceActivationCounter = Map.empty[UUID, Int]
+  /**
+   * Checks whether the system is in a generally overloaded state.
+   */
+  def isOverloaded()(implicit tid: TransactionId): Boolean = {
+    val concurrentActivations = loadBalancer.totalActiveActivations
+    logging.info(this, s"concurrent activations in system = $concurrentActivations, below limit = $systemOverloadLimit")
+    concurrentActivations > systemOverloadLimit
+  }
+}
 
-    private val healthCheckInterval = 5.seconds
+sealed trait RateLimit {
+  def ok: Boolean
+  def errorMsg: String
+}
 
-    /**
-     * Checks whether the operation should be allowed to proceed.
-     */
-    def check(user: Identity)(implicit tid: TransactionId): Boolean = {
-        val concurrentActivations = namespaceActivationCounter.getOrElse(user.uuid, 0)
-        val concurrencyLimit = user.limits.concurrentInvocations.getOrElse(defaultConcurrencyLimit)
-        logging.info(this, s"namespace = ${user.uuid.asString}, concurrent activations = $concurrentActivations, below limit = $concurrencyLimit")
-        concurrentActivations < concurrencyLimit
-    }
+case class ConcurrentRateLimit(count: Int, allowed: Int) extends RateLimit {
+  val ok = count < allowed // must have slack for the current activation request
+  override def errorMsg = Messages.tooManyConcurrentRequests(count, allowed)
+}
 
-    /**
-     * Checks whether the system is in a generally overloaded state.
-     */
-    def isOverloaded()(implicit tid: TransactionId): Boolean = {
-        val concurrentActivations = namespaceActivationCounter.values.sum
-        logging.info(this, s"concurrent activations in system = $concurrentActivations, below limit = $systemOverloadLimit")
-        concurrentActivations > systemOverloadLimit
-    }
-
-    Scheduler.scheduleWaitAtLeast(healthCheckInterval) { () =>
-        namespaceActivationCounter = loadBalancer.getActiveNamespaceActivationCounts
-        Future.successful(Unit)
-    }
+case class TimedRateLimit(count: Int, allowed: Int) extends RateLimit {
+  val ok = count <= allowed // the count is already updated to account for the current request
+  override def errorMsg = Messages.tooManyRequests(count, allowed)
 }

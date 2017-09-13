@@ -10,6 +10,13 @@ default.props
 results
 *.retry
 
+# Environments
+/ansible/environments/*
+!/ansible/environments/distributed
+!/ansible/environments/docker-machine
+!/ansible/environments/local
+!/ansible/environments/mac
+
 # Eclipse
 bin/
 **/.project
@@ -42,6 +49,7 @@ node_modules
 # IntelliJ
 .idea
 *.class
+*.iml
 
 # Ansible
 ansible/environments/docker-machine/hosts

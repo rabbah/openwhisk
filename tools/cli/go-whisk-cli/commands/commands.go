@@ -30,6 +30,7 @@ import (
 
 var client *whisk.Client
 const DefaultOpenWhiskApiPath string = "/api"
+var UserAgent string = "OpenWhisk-CLI"
 
 func setupClientConfig(cmd *cobra.Command, args []string) (error){
     baseURL, err := getURLBase(Properties.APIHost, DefaultOpenWhiskApiPath)
@@ -46,7 +47,7 @@ func setupClientConfig(cmd *cobra.Command, args []string) (error){
     if err != nil && !apiHostRequired {
         whisk.Debug(whisk.DbgError, "getURLBase(%s, %s) error: %s\n", Properties.APIHost, DefaultOpenWhiskApiPath, err)
         errMsg := wski18n.T("The API host is not valid: {{.err}}", map[string]interface{}{"err": err})
-        whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXITCODE_ERR_GENERAL,
+        whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXIT_CODE_ERR_GENERAL,
             whisk.DISPLAY_MSG, whisk.NO_DISPLAY_USAGE)
         return whiskErr
     }
@@ -60,6 +61,7 @@ func setupClientConfig(cmd *cobra.Command, args []string) (error){
         Version:    Properties.APIVersion,
         Insecure:   flags.global.insecure,
         Host:       Properties.APIHost,
+        UserAgent:  UserAgent + "/1.0 (" + Properties.CLIVersion + ")",
     }
 
     // Setup client
@@ -68,7 +70,7 @@ func setupClientConfig(cmd *cobra.Command, args []string) (error){
     if err != nil {
         whisk.Debug(whisk.DbgError, "whisk.NewClient(%#v, %#v) error: %s\n", http.DefaultClient, clientConfig, err)
         errMsg := wski18n.T("Unable to initialize server connection: {{.err}}", map[string]interface{}{"err": err})
-        whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXITCODE_ERR_GENERAL,
+        whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXIT_CODE_ERR_GENERAL,
         whisk.DISPLAY_MSG, whisk.DISPLAY_USAGE)
         return whiskErr
     }
@@ -76,9 +78,7 @@ func setupClientConfig(cmd *cobra.Command, args []string) (error){
     return nil
 }
 
-func init() {
-
-}
+func init() {}
 
 func getKeyValueArgs(args []string, argIndex int, parsedArgs []string) ([]string, []string, error) {
     var whiskErr error
@@ -94,7 +94,7 @@ func getKeyValueArgs(args []string, argIndex int, parsedArgs []string) ([]string
         whisk.Debug(whisk.DbgError, "Arguments for '%s' must be a key/value pair; args: %s", args[argIndex], args)
         errMsg := wski18n.T("Arguments for '{{.arg}}' must be a key/value pair",
             map[string]interface{}{"arg": args[argIndex]})
-        whiskErr = whisk.MakeWskError(errors.New(errMsg), whisk.EXITCODE_ERR_GENERAL, whisk.DISPLAY_MSG,
+        whiskErr = whisk.MakeWskError(errors.New(errMsg), whisk.EXIT_CODE_ERR_GENERAL, whisk.DISPLAY_MSG,
             whisk.DISPLAY_USAGE)
     }
 
@@ -111,7 +111,7 @@ func getValueFromArgs(args []string, argIndex int, parsedArgs []string) ([]strin
         whisk.Debug(whisk.DbgError, "An argument must be provided for '%s'; args: %s", args[argIndex], args)
         errMsg := wski18n.T("An argument must be provided for '{{.arg}}'",
             map[string]interface{}{"arg": args[argIndex]})
-        whiskErr = whisk.MakeWskError(errors.New(errMsg), whisk.EXITCODE_ERR_GENERAL, whisk.DISPLAY_MSG,
+        whiskErr = whisk.MakeWskError(errors.New(errMsg), whisk.EXIT_CODE_ERR_GENERAL, whisk.DISPLAY_MSG,
             whisk.DISPLAY_USAGE)
     }
 
@@ -132,7 +132,7 @@ func parseArgs(args []string) ([]string, []string, []string, error) {
                 whisk.Debug(whisk.DbgError, "getValueFromArgs(%#v, %d) failed: %s\n", args, i, whiskErr)
                 errMsg := wski18n.T("The parameter arguments are invalid: {{.err}}",
                     map[string]interface{}{"err": whiskErr})
-                whiskErr = whisk.MakeWskError(errors.New(errMsg), whisk.EXITCODE_ERR_GENERAL, whisk.DISPLAY_MSG,
+                whiskErr = whisk.MakeWskError(errors.New(errMsg), whisk.EXIT_CODE_ERR_GENERAL, whisk.DISPLAY_MSG,
                     whisk.DISPLAY_USAGE)
                 return nil, nil, nil, whiskErr
             }
@@ -149,7 +149,7 @@ func parseArgs(args []string) ([]string, []string, []string, error) {
                 whisk.Debug(whisk.DbgError, "getValueFromArgs(%#v, %d) failed: %s\n", args, i, whiskErr)
                 errMsg := wski18n.T("The annotation arguments are invalid: {{.err}}",
                     map[string]interface{}{"err": whiskErr})
-                whiskErr = whisk.MakeWskError(errors.New(errMsg), whisk.EXITCODE_ERR_GENERAL, whisk.DISPLAY_MSG,
+                whiskErr = whisk.MakeWskError(errors.New(errMsg), whisk.EXIT_CODE_ERR_GENERAL, whisk.DISPLAY_MSG,
                     whisk.DISPLAY_USAGE)
                 return nil, nil, nil, whiskErr
             }
@@ -166,7 +166,7 @@ func parseArgs(args []string) ([]string, []string, []string, error) {
                 whisk.Debug(whisk.DbgError, "getKeyValueArgs(%#v, %d) failed: %s\n", args, i, whiskErr)
                 errMsg := wski18n.T("The parameter arguments are invalid: {{.err}}",
                     map[string]interface{}{"err": whiskErr})
-                whiskErr = whisk.MakeWskError(errors.New(errMsg), whisk.EXITCODE_ERR_GENERAL, whisk.DISPLAY_MSG,
+                whiskErr = whisk.MakeWskError(errors.New(errMsg), whisk.EXIT_CODE_ERR_GENERAL, whisk.DISPLAY_MSG,
                     whisk.DISPLAY_USAGE)
                 return nil, nil, nil, whiskErr
             }
@@ -176,7 +176,7 @@ func parseArgs(args []string) ([]string, []string, []string, error) {
                 whisk.Debug(whisk.DbgError, "getKeyValueArgs(%#v, %d) failed: %s\n", args, i, whiskErr)
                 errMsg := wski18n.T("The annotation arguments are invalid: {{.err}}",
                     map[string]interface{}{"err": whiskErr})
-                whiskErr = whisk.MakeWskError(errors.New(errMsg), whisk.EXITCODE_ERR_GENERAL, whisk.DISPLAY_MSG,
+                whiskErr = whisk.MakeWskError(errors.New(errMsg), whisk.EXIT_CODE_ERR_GENERAL, whisk.DISPLAY_MSG,
                     whisk.DISPLAY_USAGE)
                 return nil, nil, nil, whiskErr
             }
@@ -201,7 +201,7 @@ func Execute() error {
     if err != nil {
         whisk.Debug(whisk.DbgError, "parseParams(%s) failed: %s\n", os.Args, err)
         errMsg := wski18n.T("Failed to parse arguments: {{.err}}", map[string]interface{}{"err":err})
-        whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXITCODE_ERR_GENERAL,
+        whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXIT_CODE_ERR_GENERAL,
             whisk.DISPLAY_MSG, whisk.DISPLAY_USAGE)
         return whiskErr
     }
@@ -210,7 +210,7 @@ func Execute() error {
     if err != nil {
         whisk.Debug(whisk.DbgError, "loadProperties() error: %s\n", err)
         errMsg := wski18n.T("Unable to access configuration properties: {{.err}}", map[string]interface{}{"err":err})
-        whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXITCODE_ERR_GENERAL,
+        whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXIT_CODE_ERR_GENERAL,
             whisk.DISPLAY_MSG, whisk.DISPLAY_USAGE)
         return whiskErr
     }
