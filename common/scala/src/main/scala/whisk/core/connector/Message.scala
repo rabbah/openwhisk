@@ -47,6 +47,20 @@ trait Message {
   override def toString = serialize
 }
 
+/**
+ * Represents a callback notification when action completes.
+ *
+ * @param target the name of the action or trigger to notify
+ * @param trigger notify as trigger otherwise as action
+ * @arapm onError notify only on error otherwise always
+ */
+case class Notification(target: FullyQualifiedEntityName, trigger: Option[Boolean], onError: Option[Boolean])
+
+object Notification extends DefaultJsonProtocol {
+  implicit val fqnSerdes = FullyQualifiedEntityName.serdes
+  implicit val serdes = jsonFormat3(Notification.apply)
+}
+
 case class ActivationMessage(override val transid: TransactionId,
                              action: FullyQualifiedEntityName,
                              revision: DocRevision,
@@ -55,17 +69,9 @@ case class ActivationMessage(override val transid: TransactionId,
                              rootControllerIndex: InstanceId,
                              blocking: Boolean,
                              content: Option[JsObject],
-                             cause: Option[ActivationId] = None)
+                             cause: Option[ActivationId] = None,
+                             notification: Option[Notification] = None)
     extends Message {
-
-  def meta =
-    JsObject("meta" -> {
-      cause map { c =>
-        JsObject(c.toJsObject.fields ++ activationId.toJsObject.fields)
-      } getOrElse {
-        activationId.toJsObject
-      }
-    })
 
   override def serialize = ActivationMessage.serdes.write(this).compactPrint
 
@@ -82,7 +88,7 @@ object ActivationMessage extends DefaultJsonProtocol {
   def parse(msg: String) = Try(serdes.read(msg.parseJson))
 
   private implicit val fqnSerdes = FullyQualifiedEntityName.serdes
-  implicit val serdes = jsonFormat9(ActivationMessage.apply)
+  implicit val serdes = jsonFormat10(ActivationMessage.apply)
 }
 
 /**
