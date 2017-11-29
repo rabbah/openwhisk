@@ -22,6 +22,7 @@ import java.time.Instant
 
 import scala.concurrent.Future
 
+import scala.util.Failure
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.http.scaladsl.model.headers.BasicHttpCredentials
@@ -33,32 +34,22 @@ import akka.http.scaladsl.server.RouteResult
 import akka.http.scaladsl.model.HttpMethods.POST
 import akka.http.scaladsl.model.headers.Authorization
 import akka.http.scaladsl.model.HttpMethods._
+import akka.http.scaladsl.model.ContentTypes
 import akka.http.scaladsl.model.MediaTypes
 import akka.http.scaladsl.model.HttpEntity
 import akka.http.scaladsl.server.RequestContext
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.unmarshalling.Unmarshal
-
 import spray.json._
-import spray.json.DefaultJsonProtocol.RootJsObjectFormat
-
+import spray.json.DefaultJsonProtocol._
 import whisk.common.TransactionId
 import whisk.core.database.CacheChangeNotification
 import whisk.core.entitlement.Collection
-import whisk.core.entity.ActivationResponse
-import whisk.core.entity.EntityPath
-import whisk.core.entity.Parameters
-import whisk.core.entity.SemVer
-import whisk.core.entity.Status
-import whisk.core.entity.TriggerLimits
-import whisk.core.entity.WhiskActivation
-import whisk.core.entity.WhiskTrigger
-import whisk.core.entity.WhiskTriggerPut
+import whisk.core.entity._
 import whisk.core.entity.types.ActivationStore
 import whisk.core.entity.types.EntityStore
-import whisk.core.entity.Identity
-import whisk.core.entity.FullyQualifiedEntityName
+import whisk.http.ErrorResponse
 
 /** A trait implementing the triggers API. */
 trait WhiskTriggersApi extends WhiskCollectionAPI {
@@ -127,89 +118,100 @@ trait WhiskTriggersApi extends WhiskCollectionAPI {
     entity(as[Option[JsObject]]) { payload =>
       getEntity(WhiskTrigger, entityStore, entityName.toDocId, Some {
         trigger: WhiskTrigger =>
-          val args = trigger.parameters.merge(payload)
-          val triggerActivationId = activationIdFactory.make()
-          logging.info(this, s"[POST] trigger activation id: ${triggerActivationId}")
+          val rulesToActivate = trigger.rules
+            .map {
+              _.filter {
+                case (_, rule) => rule.status == Status.ACTIVE
+              }
+            }
+            .getOrElse(Map.empty)
 
-          val triggerActivation = WhiskActivation(
-            namespace = user.namespace.toPath, // all activations should end up in the one space regardless trigger.namespace,
-            entityName.name,
-            user.subject,
-            triggerActivationId,
-            Instant.now(Clock.systemUTC()),
-            Instant.EPOCH,
-            response = ActivationResponse.success(payload orElse Some(JsObject())),
-            version = trigger.version,
-            duration = None)
+          if (rulesToActivate.isEmpty) {
+            // nothing to do since there are no associated rules
+            complete(NoContent)
+          } else {
+            // make an activation id for the trigger
+            val triggerActivationId = activationIdFactory.make()
 
-          logging.info(this, s"[POST] trigger activated, writing activation record to datastore: $triggerActivationId")
-          WhiskActivation.put(activationStore, triggerActivation) recover {
-            case t =>
-              logging.error(this, s"[POST] storing trigger activation $triggerActivationId failed: ${t.getMessage}")
+            // schedule rule activations...
+            Future {
+              val triggerActivation = WhiskActivation(
+                namespace = user.namespace.toPath,
+                entityName.name,
+                user.subject,
+                triggerActivationId,
+                Instant.now(Clock.systemUTC()),
+                Instant.EPOCH,
+                response = ActivationResponse.success(payload orElse Some(JsObject())),
+                version = trigger.version,
+                duration = None)
+              logging.info(this, s"[POST] trigger activation id: ${triggerActivation.activationId}")
+
+              activateRules(user, triggerActivation, rulesToActivate, trigger.parameters.merge(payload))
+            }
+
+            // ... but complete HTTP request immediately
+            complete(Accepted, triggerActivationId.toJsObject)
           }
+      })
+    }
+  }
 
-          val url = Uri(s"http://localhost:${whiskConfig.servicePort}")
+  private val url = Uri(s"http://localhost:${whiskConfig.servicePort}")
 
-          trigger.rules.map {
-            _.filter {
-              case (ruleName, rule) => rule.status == Status.ACTIVE
-            } foreach {
-              case (ruleName, rule) =>
-                val ruleActivationId = activationIdFactory.make()
-                val ruleActivation = WhiskActivation(
-                  namespace = user.namespace.toPath, // all activations should end up in the one space regardless trigger.namespace,
-                  ruleName.name,
-                  user.subject,
-                  ruleActivationId,
-                  Instant.now(Clock.systemUTC()),
-                  Instant.EPOCH,
-                  cause = Some(triggerActivationId),
-                  response = ActivationResponse.success(),
-                  version = trigger.version,
-                  duration = None)
-                WhiskActivation.put(activationStore, ruleActivation) recover {
-                  case t =>
-                    logging.error(this, s"[POST] storing rule activation $ruleActivationId failed: ${t.getMessage}")
-                }
+  private def activateRules(user: Identity,
+                            triggerActivation: WhiskActivation,
+                            rulesToActivate: Map[FullyQualifiedEntityName, ReducedRule],
+                            args: Some[JsObject])(implicit transid: TransactionId): Unit = {
 
-                val actionNamespace = rule.action.path.root.asString
-                val actionPath = {
-                  rule.action.path.relativePath.map { pkg =>
-                    (Path.SingleSlash + pkg.namespace) / rule.action.name.asString
-                  } getOrElse {
-                    Path.SingleSlash + rule.action.name.asString
-                  }
-                }.toString
+    val activatedActions: Iterable[Future[JsObject]] = rulesToActivate.map {
+      case (ruleName, rule) =>
+        val actionNamespace = rule.action.path.root.asString
+        val actionBasePath = Path("/api/v1") / "namespaces" / actionNamespace / "actions"
 
-                val actionUrl = Path("/api/v1") / "namespaces" / actionNamespace / "actions"
-                val request = HttpRequest(
-                  method = POST,
-                  uri = url.withPath(actionUrl + actionPath),
-                  headers =
-                    List(Authorization(BasicHttpCredentials(user.authkey.uuid.asString, user.authkey.key.asString))),
-                  entity = HttpEntity(MediaTypes.`application/json`, args.getOrElse(JsObject()).compactPrint))
+        val actionPath = {
+          rule.action.path.relativePath.map { pkg =>
+            (Path.SingleSlash + pkg.namespace) / rule.action.name.asString
+          } getOrElse {
+            Path.SingleSlash + rule.action.name.asString
+          }
+        }.toString
 
-                Http().singleRequest(request).map {
-                  response =>
-                    response.status match {
-                      case OK | Accepted =>
-                        Unmarshal(response.entity).to[JsObject].map { a =>
-                          logging.info(this, s"${rule.action} activated ${a.fields("activationId")}")
-                        }
-                      case NotFound =>
-                        response.discardEntityBytes()
-                        logging.info(this, s"${rule.action} failed, action not found")
-                      case _ =>
-                        Unmarshal(response.entity).to[String].map { error =>
-                          logging.warn(this, s"${rule.action} failed due to $error")
-                        }
-                    }
+        // TODO: replace this with internal action activation
+        val request = HttpRequest(
+          method = POST,
+          uri = url.withPath(actionBasePath + actionPath),
+          headers = List(Authorization(BasicHttpCredentials(user.authkey.uuid.asString, user.authkey.key.asString))),
+          entity = HttpEntity(MediaTypes.`application/json`, args.getOrElse(JsObject()).compactPrint))
+
+        Http()
+          .singleRequest(request)
+          .flatMap { response =>
+            response.status match {
+              case OK | Accepted =>
+                Unmarshal(response.entity).to[JsObject].map(a => JsObject("activationId" -> a.fields("activationId")))
+
+              case _ if (response.entity.contentType == ContentTypes.`application/json`) =>
+                Unmarshal(response.entity)
+                  .to[ErrorResponse]
+                  .map(e => JsObject(ActivationResponse.ERROR_FIELD -> JsString(e.error)))
+
+              case _ =>
+                Unmarshal(response.entity).to[String].map { error =>
+                  logging.warn(this, s"${rule.action} failed due to $error")
+                  JsObject(ActivationResponse.ERROR_FIELD -> JsString("internal error"))
                 }
             }
           }
+          .map(s => JsObject(ruleName.asString -> JsObject(rule.action.asString -> s)))
+    }
 
-          complete(Accepted, triggerActivationId.toJsObject)
-      })
+    Future.sequence(activatedActions).map { msgs =>
+      val doc = triggerActivation.withLogs(ActivationLogs(Vector(msgs.toJson)))
+      WhiskActivation.put(activationStore, doc) andThen {
+        case Failure(t: Throwable) =>
+          logging.error(this, s"[POST] storing trigger activation failed: ${t.getMessage}")
+      }
     }
   }
 
