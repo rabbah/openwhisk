@@ -23,24 +23,13 @@ import java.util.Date
 import scala.concurrent.duration.DurationInt
 import scala.language.postfixOps
 import scala.util.matching.Regex
-
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
-
-import common.ActivationResult
-import common.StreamLogging
-import common.TestHelpers
-import common.TestUtils
+import common._
 import common.TestUtils._
-import common.BaseWsk
-import common.WskProps
-import common.WskTestHelpers
-
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-
 import spray.json._
 import spray.json.DefaultJsonProtocol._
-
 import whisk.core.WhiskConfig
 import whisk.http.Messages.sequenceIsTooLong
 
@@ -55,7 +44,9 @@ abstract class WskSequenceTests extends TestHelpers with ScalatestRouteTest with
   val allowedActionDuration = 120 seconds
   val shortDuration = 10 seconds
 
-  val whiskConfig = new WhiskConfig(Map(WhiskConfig.actionSequenceMaxLimit -> null))
+  val whiskConfig = new WhiskConfig(
+    Map(WhiskConfig.actionSequenceMaxLimit -> null),
+    propertiesFile = Some(WhiskProperties.whiskPropertiesFile))
   assert(whiskConfig.isValid)
 
   behavior of "Wsk Sequence"

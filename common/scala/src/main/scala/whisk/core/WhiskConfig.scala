@@ -30,12 +30,12 @@ import whisk.common.{Config, Logging}
  * a value, and whose values are default values. A null value in the Map means there is
  * no default value specified, so it must appear in the properties file.
  * @param optionalProperties a set of optional properties (which may not be defined).
- * @param propertiesFile a File object, the whisk.properties file, which if given contains the property values.
+ * @param propertiesFile an optional File object, e.g., the whisk.properties file, which if given contains the property values.
  * @param env an optional environment to initialize from.
  */
 class WhiskConfig(requiredProperties: Map[String, String],
                   optionalProperties: Set[String] = Set(),
-                  propertiesFile: File = null,
+                  propertiesFile: Option[File] = None,
                   env: Map[String, String] = sys.env)(implicit logging: Logging)
     extends Config(requiredProperties, optionalProperties)(env) {
 
@@ -46,7 +46,7 @@ class WhiskConfig(requiredProperties: Map[String, String],
    */
   override protected def getProperties() = {
     val properties = super.getProperties()
-    WhiskConfig.readPropertiesFromFile(properties, Option(propertiesFile) getOrElse (WhiskConfig.whiskPropertiesFile))
+    propertiesFile.foreach(f => WhiskConfig.readPropertiesFromFile(properties, f))
     properties
   }
 
@@ -111,26 +111,6 @@ object WhiskConfig {
    * Reads a key from system environment as if it was part of WhiskConfig.
    */
   def readFromEnv(key: String): Option[String] = sys.env.get(asEnvVar(key))
-
-  private def whiskPropertiesFile: File = {
-    def propfile(dir: String, recurse: Boolean = false): File =
-      if (dir != null) {
-        val base = new File(dir)
-        val file = new File(base, "whisk.properties")
-        if (file.exists())
-          file
-        else if (recurse)
-          propfile(base.getParent, true)
-        else null
-      } else null
-
-    val dir = sys.props.get("user.dir")
-    if (dir.isDefined) {
-      propfile(dir.get, true)
-    } else {
-      null
-    }
-  }
 
   /**
    * Reads a Map of key-value pairs from the environment (sys.env) -- store them in the

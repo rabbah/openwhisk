@@ -25,7 +25,7 @@ import org.scalatest.BeforeAndAfter
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.FlatSpec
 import org.scalatest.Matchers
-import common.StreamLogging
+import common.{StreamLogging, WhiskProperties}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.http.scaladsl.testkit.RouteTestTimeout
 import spray.json.DefaultJsonProtocol
@@ -68,7 +68,8 @@ protected trait ControllerTestCommon
   override implicit val actorSystem = system // defined in ScalatestRouteTest
   override val executionContext = actorSystem.dispatcher
 
-  override val whiskConfig = new WhiskConfig(RestApiCommons.requiredProperties)
+  override val whiskConfig =
+    new WhiskConfig(RestApiCommons.requiredProperties, propertiesFile = Some(WhiskProperties.whiskPropertiesFile))
   assert(whiskConfig.isValid)
 
   // initialize runtimes manifest

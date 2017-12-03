@@ -56,13 +56,15 @@ object Invoker {
    * An object which records the environment variables required for this component to run.
    */
   def requiredProperties =
-    Map(servicePort -> 8080.toString(), dockerRegistry -> null, dockerImagePrefix -> null) ++
+    Map(servicePort -> 8080.toString()) ++
       ExecManifest.requiredProperties ++
       WhiskEntityStore.requiredProperties ++
       WhiskActivationStore.requiredProperties ++
       kafkaHosts ++
       zookeeperHosts ++
       wskApiHost ++ Map(
+      dockerRegistry -> null,
+      dockerImagePrefix -> null,
       dockerImageTag -> "latest",
       invokerNumCore -> "4",
       invokerCoreShare -> "2",

@@ -42,7 +42,7 @@ import akka.testkit.TestFSMRef
 import akka.testkit.TestKit
 import akka.testkit.TestProbe
 import akka.util.Timeout
-import common.StreamLogging
+import common.{StreamLogging, WhiskProperties}
 import whisk.common.TransactionId
 import whisk.core.WhiskConfig
 import whisk.core.connector.ActivationMessage
@@ -82,7 +82,8 @@ class InvokerSupervisionTests
     with MockFactory
     with StreamLogging {
 
-  val config = new WhiskConfig(ExecManifest.requiredProperties)
+  val config =
+    new WhiskConfig(ExecManifest.requiredProperties, propertiesFile = Some(WhiskProperties.whiskPropertiesFile))
 
   ExecManifest.initialize(config)
 

@@ -22,17 +22,14 @@ import java.time.Instant
 
 import scala.concurrent.Await
 import scala.language.postfixOps
-
 import org.junit.runner.RunWith
 import org.scalatest.BeforeAndAfter
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.FlatSpec
 import org.scalatest.Matchers
 import org.scalatest.junit.JUnitRunner
-
 import akka.stream.ActorMaterializer
-import common.StreamLogging
-import common.WskActorSystem
+import common.{StreamLogging, WhiskProperties, WskActorSystem}
 import whisk.core.WhiskConfig
 import whisk.core.controller.test.WhiskAuthHelpers
 import whisk.core.database.ArtifactStore
@@ -71,7 +68,9 @@ class ViewTests
 
   implicit val materializer = ActorMaterializer()
 
-  val config = new WhiskConfig(WhiskEntityStore.requiredProperties ++ WhiskActivationStore.requiredProperties)
+  val config = new WhiskConfig(
+    WhiskEntityStore.requiredProperties ++ WhiskActivationStore.requiredProperties,
+    propertiesFile = Some(WhiskProperties.whiskPropertiesFile))
   val entityStore = WhiskEntityStore.datastore(config)
   val activationStore = WhiskActivationStore.datastore(config)
 

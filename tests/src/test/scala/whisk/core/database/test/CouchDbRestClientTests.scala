@@ -23,7 +23,6 @@ import scala.concurrent.Promise
 import scala.concurrent.duration.DurationDouble
 import scala.concurrent.duration.DurationInt
 import scala.util._
-
 import org.junit.runner.RunWith
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.FlatSpec
@@ -31,13 +30,11 @@ import org.scalatest.Matchers
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.junit.JUnitRunner
-
 import akka.actor.Props
 import akka.http.scaladsl.model._
 import akka.stream.scaladsl._
 import akka.util.ByteString
-import common.StreamLogging
-import common.WskActorSystem
+import common.{StreamLogging, WhiskProperties, WskActorSystem}
 import spray.json._
 import spray.json.DefaultJsonProtocol._
 import whisk.core.WhiskConfig
@@ -59,7 +56,8 @@ class CouchDbRestClientTests
   private def someId(prefix: String): String = s"${prefix}${Random.nextInt().abs}"
 
   val config = new WhiskConfig(
-    Map(dbProvider -> null, dbProtocol -> null, dbUsername -> null, dbPassword -> null, dbHost -> null, dbPort -> null))
+    Map(dbProvider -> null, dbProtocol -> null, dbUsername -> null, dbPassword -> null, dbHost -> null, dbPort -> null),
+    propertiesFile = Some(WhiskProperties.whiskPropertiesFile))
 
   // We assume this DB does not exist.
   val dbName = someId("whisk_test_db_")

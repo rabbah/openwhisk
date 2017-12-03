@@ -19,9 +19,7 @@ package whisk.core.entity.test
 
 import org.scalatest.Matchers
 import org.scalatest.Suite
-
-import common.StreamLogging
-import common.WskActorSystem
+import common.{StreamLogging, WhiskProperties, WskActorSystem}
 import whisk.core.WhiskConfig
 import whisk.core.entity._
 import whisk.core.entity.ArgNormalizer.trim
@@ -33,7 +31,8 @@ import spray.json.DefaultJsonProtocol._
 trait ExecHelpers extends Matchers with WskActorSystem with StreamLogging {
   self: Suite =>
 
-  private val config = new WhiskConfig(ExecManifest.requiredProperties)
+  private val config =
+    new WhiskConfig(ExecManifest.requiredProperties, propertiesFile = Some(WhiskProperties.whiskPropertiesFile))
   ExecManifest.initialize(config) should be a 'success
 
   protected val NODEJS = "nodejs"

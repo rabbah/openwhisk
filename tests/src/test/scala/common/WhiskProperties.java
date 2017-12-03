@@ -30,7 +30,6 @@ import static org.junit.Assert.assertTrue;
  * Properties that describe a whisk installation
  */
 public class WhiskProperties {
-
     /**
      * The name of the properties file.
      */
@@ -68,21 +67,20 @@ public class WhiskProperties {
      */
     private static final Properties whiskProperties;
 
-    static {
-        /**
-         * Finds the whisk home directory. This is resolved to either (in
-         * order):
-         *
-         * 1. a system property openwhisk.dir
-         *
-         * 2. OPENWHISK_HOME from the environment
-         *
-         * 3. a path in the directory tree containing WHISK_PROPS_FILE.
-         *
-         * @return the path to whisk home as a string
-         * @throws assertion
-         *             failure if whisk home cannot be determined
-         */
+    /**
+     * Finds the whisk home directory. This is resolved to either (in
+     * order):
+     *
+     * 1. a system property openwhisk.dir
+     *
+     * 2. OPENWHISK_HOME from the environment
+     *
+     * 3. a path in the directory tree containing WHISK_PROPS_FILE.
+     *
+     * @return the path to whisk home as a string
+     * @throws assertion failure if whisk home cannot be determined
+     */
+    private static String wskdir() {
         String wskdir = System.getProperty("openwhisk.home", System.getenv("OPENWHISK_HOME"));
         if (wskdir == null) {
             String dir = System.getProperty("user.dir");
@@ -96,12 +94,16 @@ public class WhiskProperties {
         }
 
         assertTrue("could not determine openwhisk home", wskdir != null);
+        return wskdir;
+    }
 
-        File wskpropsFile = new File(wskdir, WHISK_PROPS_FILE);
-        assertTrue(String.format("'%s' does not exists but required", wskpropsFile), wskpropsFile.exists());
+    public static final File whiskPropertiesFile = new File(wskdir(), WHISK_PROPS_FILE);
+
+    static {
+        assertTrue(String.format("'%s' does not exists but required", whiskPropertiesFile), whiskPropertiesFile.exists());
 
         // loads properties from file
-        whiskProperties = loadProperties(wskpropsFile);
+        whiskProperties = loadProperties(whiskPropertiesFile);
 
         // set whisk home from read properties
         whiskHome = whiskProperties.getProperty("openwhisk.home");
@@ -109,6 +111,7 @@ public class WhiskProperties {
         System.out.format("deploy target %s\n", deployTarget != null ? deployTarget : "not defined");
         System.out.format("test router? %s\n", testRouter);
     }
+
 
     /**
      * The path to the CLI directory.

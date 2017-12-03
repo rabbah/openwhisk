@@ -25,8 +25,7 @@ import org.junit.runner.RunWith
 import org.scalatest.FlatSpec
 import org.scalatest.Matchers
 import org.scalatest.junit.JUnitRunner
-
-import common.StreamLogging
+import common.{StreamLogging, WhiskProperties}
 
 @RunWith(classOf[JUnitRunner])
 class WhiskConfigTests extends FlatSpec with Matchers with StreamLogging {
@@ -34,7 +33,7 @@ class WhiskConfigTests extends FlatSpec with Matchers with StreamLogging {
   behavior of "WhiskConfig"
 
   it should "get required property" in {
-    val config = new WhiskConfig(WhiskConfig.edgeHost)
+    val config = new WhiskConfig(WhiskConfig.edgeHost, propertiesFile = Some(WhiskProperties.whiskPropertiesFile))
     assert(config.isValid)
     assert(config.edgeHost.nonEmpty)
   }
@@ -47,7 +46,7 @@ class WhiskConfigTests extends FlatSpec with Matchers with StreamLogging {
     bw.write("a=A\n")
     bw.close()
 
-    val config = new WhiskConfig(Map("a" -> null), Set(), file)
+    val config = new WhiskConfig(Map("a" -> null), Set(), Some(file))
     assert(config.isValid && config("a") == "A")
   }
 
@@ -59,7 +58,7 @@ class WhiskConfigTests extends FlatSpec with Matchers with StreamLogging {
     bw.write("a=A\n")
     bw.close()
 
-    val config = new WhiskConfig(Map("a" -> null, "b" -> null), Set(), file)
+    val config = new WhiskConfig(Map("a" -> null, "b" -> null), Set(), Some(file))
     assert(!config.isValid && config("b") == null)
   }
 
@@ -73,7 +72,7 @@ class WhiskConfigTests extends FlatSpec with Matchers with StreamLogging {
     bw.write("c=C\n")
     bw.close()
 
-    val config = new WhiskConfig(Map("a" -> null, "b" -> "???"), Set("c", "d"), file, env = Map())
+    val config = new WhiskConfig(Map("a" -> null, "b" -> "???"), Set("c", "d"), Some(file), env = Map())
     assert(config.isValid && config("a") == "A" && config("b") == "B")
     assert(config("c") == "C")
     assert(config("d") == "")
@@ -84,7 +83,9 @@ class WhiskConfigTests extends FlatSpec with Matchers with StreamLogging {
   }
 
   it should "get property with no value from whisk.properties file" in {
-    val config = new WhiskConfig(Map(WhiskConfig.dockerRegistry -> null))
+    val config = new WhiskConfig(
+      Map(WhiskConfig.dockerRegistry -> null),
+      propertiesFile = Some(WhiskProperties.whiskPropertiesFile))
     println(s"${WhiskConfig.dockerRegistry} is: '${config.dockerRegistry}'")
     assert(config.isValid)
   }

@@ -44,7 +44,7 @@ class KafkaConnectorTests extends FlatSpec with Matchers with WskActorSystem wit
   implicit val transid = TransactionId.testing
   implicit val ec = ExecutionContextFactory.makeCachedThreadPoolExecutionContext()
 
-  val config = new WhiskConfig(WhiskConfig.kafkaHosts)
+  val config = new WhiskConfig(WhiskConfig.kafkaHosts, propertiesFile = Some(WhiskProperties.whiskPropertiesFile))
   assert(config.isValid)
 
   val groupid = "kafkatest"
