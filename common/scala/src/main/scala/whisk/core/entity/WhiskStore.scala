@@ -89,8 +89,6 @@ protected[core] trait WhiskDocument extends DocumentSerializer with DocumentRevi
 }
 
 object WhiskAuthStore {
-  implicit val docReader = WhiskDocumentReader
-
   def requiredProperties =
     Map(
       dbProvider -> null,
@@ -120,16 +118,10 @@ object WhiskEntityStore {
   def datastore(config: WhiskConfig)(implicit system: ActorSystem, logging: Logging, materializer: ActorMaterializer) =
     SpiLoader
       .get[ArtifactStoreProvider]
-      .makeStore[WhiskEntity](config, _.dbWhisk)(
-        WhiskEntityJsonFormat,
-        WhiskDocumentReader,
-        system,
-        logging,
-        materializer)
+      .makeStore[WhiskEntity](config, _.dbWhisk)(WhiskEntityJsonFormat, system, logging, materializer)
 }
 
 object WhiskActivationStore {
-  implicit val docReader = WhiskDocumentReader
   def requiredProperties =
     Map(
       dbProvider -> null,

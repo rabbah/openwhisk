@@ -153,6 +153,12 @@ class TriggersApiTests extends ControllerTestCommon with WhiskTriggersApi {
     Get(s"/$namespace/${collection.path}/${rule.name}") ~> Route.seal(routes(creds)) ~> check {
       status should be(Conflict)
     }
+
+    val action = WhiskAction(namespace, aname(), jsDefault("??"))
+    put(entityStore, action)
+    Get(s"/$namespace/${collection.path}/${action.name}") ~> Route.seal(routes(creds)) ~> check {
+      status should be(Conflict)
+    }
   }
 
   //// DEL /triggers/name
