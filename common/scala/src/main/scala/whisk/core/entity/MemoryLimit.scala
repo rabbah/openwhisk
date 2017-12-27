@@ -27,10 +27,12 @@ import spray.json.JsValue
 import spray.json.RootJsonFormat
 import spray.json.deserializationError
 import whisk.core.entity.size.SizeInt
+import whisk.core.WhiskConfig
+import whisk.core.WhiskConfig.{actionMemoryMin, actionMemoryMax, actionMemoryDefault}
 
 /**
  * MemoyLimit encapsulates allowed memory for an action. The limit must be within a
- * permissible range (currently [128MB, 512MB]).
+ * permissible range (by default [128MB, 512MB]).
  *
  * It is a value type (hence == is .equals, immutable and cannot be assigned null).
  * The constructor is private so that argument requirements are checked and normalized
@@ -41,12 +43,17 @@ import whisk.core.entity.size.SizeInt
 protected[entity] class MemoryLimit private (val megabytes: Int) extends AnyVal {}
 
 protected[core] object MemoryLimit extends ArgNormalizer[MemoryLimit] {
-  protected[core] val MIN_MEMORY = 128 MB
-  protected[core] val MAX_MEMORY = 512 MB
-  protected[core] val STD_MEMORY = 256 MB
+  // FIXME: reading the memory limits from sys.env instead of a canonical property reader
+  // because WhiskConfig requires a logger, which requires an actor system, neither of
+  // which are readily available here; rather than introduce significant refactoring,
+  // defer this fix until WhiskConfig is refactored itself, which is planned to introduce
+  // type safe properties
+  protected[core] val minMemory = ByteSize.fromString(WhiskConfig.readFromEnv(actionMemoryMin).getOrElse("128M"))
+  protected[core] val maxMemory = ByteSize.fromString(WhiskConfig.readFromEnv(actionMemoryMax).getOrElse("512M"))
+  protected[core] val stdMemory = ByteSize.fromString(WhiskConfig.readFromEnv(actionMemoryDefault).getOrElse("256M"))
 
-  /** Gets TimeLimit with default duration */
-  protected[core] def apply(): MemoryLimit = MemoryLimit(STD_MEMORY)
+  /** Gets MemoryLimit with default value */
+  protected[core] def apply(): MemoryLimit = MemoryLimit(stdMemory)
 
   /**
    * Creates MemoryLimit for limit, iff limit is within permissible range.
@@ -57,8 +64,8 @@ protected[core] object MemoryLimit extends ArgNormalizer[MemoryLimit] {
    */
   @throws[IllegalArgumentException]
   protected[core] def apply(megabytes: ByteSize): MemoryLimit = {
-    require(megabytes >= MIN_MEMORY, s"memory $megabytes below allowed threshold of $MIN_MEMORY")
-    require(megabytes <= MAX_MEMORY, s"memory $megabytes exceeds allowed threshold of $MAX_MEMORY")
+    require(megabytes >= minMemory, s"memory $megabytes below allowed threshold of $minMemory")
+    require(megabytes <= maxMemory, s"memory $megabytes exceeds allowed threshold of $maxMemory")
     new MemoryLimit(megabytes.toMB.toInt);
   }
 

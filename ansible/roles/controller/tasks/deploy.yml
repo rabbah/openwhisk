@@ -81,6 +81,9 @@
       "LIMITS_ACTIONS_INVOKES_CONCURRENTINSYSTEM": "{{ limits.concurrentInvocationsSystem }}"
       "LIMITS_TRIGGERS_FIRES_PERMINUTE": "{{ limits.firesPerMinute }}"
       "LIMITS_ACTIONS_SEQUENCE_MAXLENGTH": "{{ limits.sequenceMaxLength }}"
+      "LIMITS_ACTIONS_MEMORY_MIN": "{{ limits.actionsMemoryMin }}"
+      "LIMITS_ACTIONS_MEMORY_MAX": "{{ limits.actionsMemoryMax }}"
+      "LIMITS_ACTIONS_MEMORY_DEFAULT": "{{ limits.actionsMemoryDefault }}"
 
       "RUNTIMES_MANIFEST": "{{ runtimesManifest | to_json }}"
       "CONTROLLER_LOCALBOOKKEEPING": "{{ controller.localBookkeeping }}"
