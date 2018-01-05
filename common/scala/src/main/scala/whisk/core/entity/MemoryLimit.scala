@@ -27,11 +27,12 @@ import spray.json.JsValue
 import spray.json.RootJsonFormat
 import spray.json.deserializationError
 import whisk.core.entity.size.SizeInt
-import whisk.core.WhiskConfig
-import whisk.core.WhiskConfig.{actionMemoryMin, actionMemoryMax, actionMemoryDefault}
+import pureconfig._
+
+case class MemoryLimitConfig(min: String, max: String, std: String)
 
 /**
- * MemoyLimit encapsulates allowed memory for an action. The limit must be within a
+ * MemoryLimit encapsulates allowed memory for an action. The limit must be within a
  * permissible range (by default [128MB, 512MB]).
  *
  * It is a value type (hence == is .equals, immutable and cannot be assigned null).
@@ -43,14 +44,11 @@ import whisk.core.WhiskConfig.{actionMemoryMin, actionMemoryMax, actionMemoryDef
 protected[entity] class MemoryLimit private (val megabytes: Int) extends AnyVal {}
 
 protected[core] object MemoryLimit extends ArgNormalizer[MemoryLimit] {
-  // FIXME: reading the memory limits from sys.env instead of a canonical property reader
-  // because WhiskConfig requires a logger, which requires an actor system, neither of
-  // which are readily available here; rather than introduce significant refactoring,
-  // defer this fix until WhiskConfig is refactored itself, which is planned to introduce
-  // type safe properties
-  protected[core] val minMemory = ByteSize.fromString(WhiskConfig.readFromEnv(actionMemoryMin).getOrElse("128M"))
-  protected[core] val maxMemory = ByteSize.fromString(WhiskConfig.readFromEnv(actionMemoryMax).getOrElse("512M"))
-  protected[core] val stdMemory = ByteSize.fromString(WhiskConfig.readFromEnv(actionMemoryDefault).getOrElse("256M"))
+  private val memoryConfig = loadConfigOrThrow[MemoryLimitConfig]("whisk.memorylimit")
+
+  protected[core] val minMemory = ByteSize.fromString(memoryConfig.min)
+  protected[core] val maxMemory = ByteSize.fromString(memoryConfig.max)
+  protected[core] val stdMemory = ByteSize.fromString(memoryConfig.std)
 
   /** Gets MemoryLimit with default value */
   protected[core] def apply(): MemoryLimit = MemoryLimit(stdMemory)
