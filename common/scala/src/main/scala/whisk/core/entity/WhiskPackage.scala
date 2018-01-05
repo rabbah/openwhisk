@@ -136,13 +136,9 @@ case class WhiskPackage(namespace: EntityPath,
    * Strictly used in view testing to enforce alignment.
    */
   override def summaryAsJson = {
-    if (WhiskEntityQueries.designDoc.endsWith("v2")) {
-      JsObject(super.summaryAsJson.fields + (WhiskPackage.bindingFieldName -> binding.isDefined.toJson))
-    } else {
-      JsObject(
-        super.summaryAsJson.fields +
-          (WhiskPackage.bindingFieldName -> binding.map(Binding.serdes.write(_)).getOrElse(JsBoolean(false))))
-    }
+    JsObject(
+      super.summaryAsJson.fields +
+        (WhiskPackage.bindingFieldName -> binding.map(Binding.serdes.write(_)).getOrElse(JsBoolean(false))))
   }
 }
 

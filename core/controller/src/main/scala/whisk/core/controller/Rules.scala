@@ -241,9 +241,8 @@ trait WhiskRulesApi extends WhiskCollectionAPI with ReferencedEntities {
    */
   override def list(user: Identity, namespace: EntityPath, excludePrivate: Boolean)(implicit transid: TransactionId) = {
     parameter('skip ? 0, 'limit ? collection.listLimit, 'count ? false) { (skip, limit, count) =>
-      val includeDocs = WhiskEntityQueries.designDoc.endsWith("v2.1.0")
       listEntities {
-        WhiskRule.listCollectionInNamespace(entityStore, namespace, skip, limit, includeDocs) map { list =>
+        WhiskRule.listCollectionInNamespace(entityStore, namespace, skip, limit, includeDocs = true) map { list =>
           val rules = list.fold((js) => js, (rls) => rls.map(WhiskRule.serdes.write(_)))
           FilterEntityList.filter(rules, excludePrivate)
         }
