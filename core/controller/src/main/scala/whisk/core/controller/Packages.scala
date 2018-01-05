@@ -176,15 +176,9 @@ trait WhiskPackagesApi extends WhiskCollectionAPI with ReferencedEntities {
    * - 500 Internal Server Error
    */
   override def list(user: Identity, namespace: EntityPath, excludePrivate: Boolean)(implicit transid: TransactionId) = {
-    // for consistency, all the collections should support the same list API
-    // but because supporting docs on actions is difficult, the API does not
-    // offer an option to fetch entities with full docs yet; see comment in
-    // Actions API for more.
-    val docs = false
-
     parameter('skip ? 0, 'limit ? collection.listLimit, 'count ? false) { (skip, limit, count) =>
       listEntities {
-        WhiskPackage.listCollectionInNamespace(entityStore, namespace, skip, limit, docs) map { list =>
+        WhiskPackage.listCollectionInNamespace(entityStore, namespace, skip, limit, includeDocs = false) map { list =>
           // any subject is entitled to list packages in any namespace
           // however, they shall only observe public packages if the packages
           // are not in one of the namespaces the subject is entitled to
