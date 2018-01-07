@@ -27,6 +27,7 @@ import spray.json.JsValue
 import spray.json.RootJsonFormat
 import spray.json.deserializationError
 import whisk.core.entity.size.SizeInt
+import whisk.core.PureConfigKeys
 import pureconfig._
 
 case class MemoryLimitConfig(min: String, max: String, std: String)
@@ -44,7 +45,7 @@ case class MemoryLimitConfig(min: String, max: String, std: String)
 protected[entity] class MemoryLimit private (val megabytes: Int) extends AnyVal {}
 
 protected[core] object MemoryLimit extends ArgNormalizer[MemoryLimit] {
-  private val memoryConfig = loadConfigOrThrow[MemoryLimitConfig]("whisk.memorylimit")
+  private val memoryConfig = loadConfigOrThrow[MemoryLimitConfig](PureConfigKeys.whiskMemory)
 
   protected[core] val minMemory = ByteSize.fromString(memoryConfig.min)
   protected[core] val maxMemory = ByteSize.fromString(memoryConfig.max)

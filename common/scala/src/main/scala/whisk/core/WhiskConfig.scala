@@ -244,4 +244,6 @@ object PureConfigKeys {
   val whiskKafkaTopics = "whisk.kafka.topics"
 
   val whiskDB = "whisk.db"
+
+  val whiskMemory = "whisk.memory"
 }
