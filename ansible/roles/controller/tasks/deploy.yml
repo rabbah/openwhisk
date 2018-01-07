@@ -82,9 +82,9 @@
       "LIMITS_TRIGGERS_FIRES_PERMINUTE": "{{ limits.firesPerMinute }}"
       "LIMITS_ACTIONS_SEQUENCE_MAXLENGTH": "{{ limits.sequenceMaxLength }}"
 
-      "CONFIG_whisk_memorylimit_min": "{{ limit_action_memory_min | default('128M') }}"
-      "CONFIG_whisk_memorylimit_max": "{{ limit_action_memory_max | default('512M') }}"
-      "CONFIG_whisk_memorylimit_std": "{{ limit_action_memory_std | default('256M') }}"
+      "CONFIG_whisk_memory_min": "{{ limit_action_memory_min | default() }}"
+      "CONFIG_whisk_memory_max": "{{ limit_action_memory_max | default() }}"
+      "CONFIG_whisk_memory_std": "{{ limit_action_memory_std | default() }}"
 
       "RUNTIMES_MANIFEST": "{{ runtimesManifest | to_json }}"
       "CONTROLLER_LOCALBOOKKEEPING": "{{ controller.localBookkeeping }}"
