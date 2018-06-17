@@ -35,6 +35,24 @@ trait RunCliCmd extends Matchers {
   def baseCommand: Buffer[String]
 
   /**
+   * Delegates execution of the command to an underlying implementation.
+   *
+   * @param expectedExitCode the expected exit code
+   * @param dir the working directory
+   * @param env an environment for the command
+   * @param fileStdin argument file to redirect to stdin (optional)
+   * @param params parameters to pass on the command line
+   * @return an instance of RunResult
+   */
+  def runCmd(expectedExitCode: Int,
+             dir: File,
+             env: Map[String, String],
+             fileStdin: Option[File],
+             params: Seq[String]): RunResult = {
+    TestUtils.runCmd(expectedExitCode, dir, TestUtils.logger, env, fileStdin.getOrElse(null), params: _*)
+  }
+
+  /**
    * Runs a command wsk [params] where the arguments come in as a sequence.
    *
    * @return RunResult which contains stdout, stderr, exit code
@@ -52,13 +70,7 @@ trait RunCliCmd extends Matchers {
     if (showCmd) println(args.mkString(" ") + " " + params.mkString(" "))
     val rr = retry(
       {
-        val rr = TestUtils.runCmd(
-          DONTCARE_EXIT,
-          workingDir,
-          TestUtils.logger,
-          sys.env ++ env,
-          stdinFile.getOrElse(null),
-          args ++ params: _*)
+        val rr = runCmd(DONTCARE_EXIT, workingDir, sys.env ++ env, stdinFile, args ++ params)
 
         if (expectedExitCode != NETWORK_ERROR_EXIT) {
           withClue(hideStr(reportFailure(args ++ params, expectedExitCode, rr).toString(), hideFromOutput)) {
