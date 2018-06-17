@@ -23,7 +23,6 @@ import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.mutable.Buffer
 import org.scalatest.Matchers
 import TestUtils._
-import whisk.utils.retry
 import scala.concurrent.duration._
 import scala.collection.mutable
 
@@ -64,25 +63,18 @@ trait RunCliCmd extends Matchers {
           workingDir: File = new File("."),
           stdinFile: Option[File] = None,
           showCmd: Boolean = false,
-          hideFromOutput: Seq[String] = Seq()): RunResult = {
+          hideFromOutput: Seq[String] = Seq(),
+          retriesOnNetworkError: Int = 3): RunResult = {
+    require(retriesOnNetworkError >= 0, "retry count on network error must not be negative")
+
     val args = baseCommand
     if (verbose) args += "--verbose"
     if (showCmd) println(args.mkString(" ") + " " + params.mkString(" "))
+
     val rr = retry(
-      {
-        val rr = runCmd(DONTCARE_EXIT, workingDir, sys.env ++ env, stdinFile, args ++ params)
-
-        if (expectedExitCode != NETWORK_ERROR_EXIT) {
-          withClue(hideStr(reportFailure(args ++ params, expectedExitCode, rr).toString(), hideFromOutput)) {
-            rr.exitCode should not be NETWORK_ERROR_EXIT
-          }
-        }
-
-        rr
-      },
-      3,
-      Some(1.second),
-      Some(s"CLI encountered a network error, retrying command..."))
+      0,
+      retriesOnNetworkError,
+      () => runCmd(DONTCARE_EXIT, workingDir, sys.env ++ env, stdinFile, args ++ params))
 
     withClue(hideStr(reportFailure(args ++ params, expectedExitCode, rr).toString(), hideFromOutput)) {
       if (expectedExitCode != TestUtils.DONTCARE_EXIT) {
@@ -94,6 +86,16 @@ trait RunCliCmd extends Matchers {
     }
 
     rr
+  }
+
+  /** Retries cmd on network error exit. */
+  private def retry(i: Int, N: Int, cmd: () => RunResult): RunResult = {
+    val rr = cmd()
+    if (rr.exitCode == NETWORK_ERROR_EXIT && i < N) {
+      Thread.sleep(1.second.toMillis)
+      println(s"command will retry to due to network error: $rr")
+      retry(i + 1, N, cmd)
+    } else rr
   }
 
   /**
