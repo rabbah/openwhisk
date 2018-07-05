@@ -27,9 +27,9 @@ The canonical unit of execution is a container which implements a specific inter
 1. accepts an initialization payload (the code),
 2. accepts runtime payload (the input parameters) and return a result,
 3. prepares the activation context,
-4. flushes all `stdout` and `stderr` logs and adds a frame marker at the end of the activation.
+4. flushes all `stdout` and `stderr` logs and adds a frame marker at the end of the activation.[*1]
 
-Any container which implements the interface may be used as an action.
+Any container which implements the interface may be used as an action.[*2]
 It is in this way that you can add support for other languages or customized runtimes.
 
 The interface is enforced via a [canonical test suite](../tests/src/test/scala/actionContainers/BasicActionRunnerTests.scala)
@@ -51,6 +51,9 @@ For some languages, it may also be necessary to
 
 **Note:** Steps 3-6 are ripe for automation and should further reduce the touch-points
 for adding a new runtime to the OpenWhisk platform in the future.
+
+[*1]: At this moment 'XXX_THE_END_OF_A_WHISK_ACTIVATION_XXX' is used as the sentinel
+[*2]: See [the relevant wiki page](https://cwiki.apache.org/confluence/display/OPENWHISK/Creating+an+OpenWhisk+runtime) for more detailed interface definition
 
 ### Canonical runtime repository
 
