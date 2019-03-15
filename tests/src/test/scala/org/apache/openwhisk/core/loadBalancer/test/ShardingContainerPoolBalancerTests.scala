@@ -497,6 +497,7 @@ class ShardingContainerPoolBalancerTests
       val msg = ActivationMessage(
         TransactionId.testing,
         actionMetaData.fullyQualifiedName(true),
+        None,
         actionMetaData.rev,
         Identity(
           Subject(),
@@ -509,7 +510,7 @@ class ShardingContainerPoolBalancerTests
         content = None)
 
       //send activation to loadbalancer
-      aid -> balancer.publish(actionMetaData.toExecutableWhiskAction.get, msg)
+      aid -> balancer.publish(actionMetaData.toExecutableWhiskAction().get, msg)
 
     }.toMap
 

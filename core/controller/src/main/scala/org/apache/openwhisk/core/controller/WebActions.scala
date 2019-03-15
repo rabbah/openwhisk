@@ -154,6 +154,7 @@ protected[core] object WhiskWebActionsApi extends Directives {
   }
 
   private val defaultMediaTranscoder: MediaExtension = mediaTranscoders.find(_.extension == ".http").get
+  protected val MAIN_SEPARATOR = "@"
 
   val allowedExtensions: Set[String] = mediaTranscoders.map(_.extension).toSet
 
@@ -162,15 +163,19 @@ protected[core] object WhiskWebActionsApi extends Directives {
    * If name ends with ".xxxx" which matches a known extension, accept it as the extension.
    * Otherwise, the extension is ".http" by definition unless enforcing the presence of an extension.
    */
-  def mediaTranscoderForName(name: String, enforceExtension: Boolean): (String, Option[MediaExtension]) = {
+  def mediaTranscoderForName(name: String,
+                             enforceExtension: Boolean): (String, Option[String], Option[MediaExtension]) = {
+    val parts = name.split(MAIN_SEPARATOR)
+    val stem = parts(0)
+    val main = if (parts.length == 2) Some(parts(1)) else None
     mediaTranscoders
-      .find(mt => name.endsWith(mt.extension))
+      .find(mt => stem.endsWith(mt.extension))
       .map { mt =>
-        val base = name.dropRight(mt.extensionLength)
-        (base, Some(mt))
+        val base = stem.dropRight(mt.extensionLength)
+        (base, main, Some(mt))
       }
       .getOrElse {
-        (name, if (enforceExtension) None else Some(defaultMediaTranscoder))
+        (stem, main, if (enforceExtension) None else Some(defaultMediaTranscoder))
       }
   }
 
@@ -385,7 +390,10 @@ trait WhiskWebActionsApi
   /** Allowed verbs. */
   private lazy val allowedOperations = get | delete | post | put | head | options | patch
 
-  private lazy val validNameSegment = pathPrefix(EntityName.REGEX.r)
+  private lazy val validNamespaceSegment = pathPrefix(EntityName.REGEX.r)
+
+  private lazy val validActionNameSegment = pathPrefix(EntityName.REGEX.r)
+
   private lazy val packagePrefix = pathPrefix("default".r | EntityName.REGEX.r)
 
   private val defaultCorsBaseResponse =
@@ -442,9 +450,9 @@ trait WhiskWebActionsApi
    */
   def routes(user: Option[Identity])(implicit transid: TransactionId): Route = {
     (allowedOperations & webRoutePrefix) {
-      validNameSegment { namespace =>
+      validNamespaceSegment { namespace =>
         packagePrefix { pkg =>
-          validNameSegment { seg =>
+          validActionNameSegment { seg =>
             handleMatch(namespace, pkg, seg, user)
           }
         }
@@ -473,7 +481,7 @@ trait WhiskWebActionsApi
     }
 
     provide(WhiskWebActionsApi.mediaTranscoderForName(actionNameWithExtension, webApiDirectives.enforceExtension)) {
-      case (actionName, Some(extension)) =>
+      case (actionName, main, Some(extension)) =>
         // extract request context, checks for overrides of reserved properties, and constructs action arguments
         // as the context body which may be the incoming request when the content type is JSON or formdata, or
         // the raw body as __ow_body (and query parameters as __ow_query) otherwise
@@ -497,11 +505,25 @@ trait WhiskWebActionsApi
                         if (context.method == OPTIONS) {
                           complete(OK, HttpEntity.Empty)
                         } else {
-                          extractEntityAndProcessRequest(actionOwnerIdentity, action, extension, onBehalfOf, context, e)
+                          extractEntityAndProcessRequest(
+                            actionOwnerIdentity,
+                            action,
+                            main,
+                            extension,
+                            onBehalfOf,
+                            context,
+                            e)
                         }
                       }
                     } else {
-                      extractEntityAndProcessRequest(actionOwnerIdentity, action, extension, onBehalfOf, context, e)
+                      extractEntityAndProcessRequest(
+                        actionOwnerIdentity,
+                        action,
+                        main,
+                        extension,
+                        onBehalfOf,
+                        context,
+                        e)
                     }
 
                   case Failure(t: RejectRequest) =>
@@ -516,7 +538,7 @@ trait WhiskWebActionsApi
           }
         }
 
-      case (_, None) =>
+      case (_, _, None) =>
         terminate(NotAcceptable, Messages.contentTypeExtensionNotSupported(WhiskWebActionsApi.allowedExtensions))
     }
   }
@@ -547,13 +569,14 @@ trait WhiskWebActionsApi
 
   private def extractEntityAndProcessRequest(actionOwnerIdentity: Identity,
                                              action: WhiskActionMetaData,
+                                             main: Option[String],
                                              extension: MediaExtension,
                                              onBehalfOf: Option[Identity],
                                              context: Context,
                                              httpEntity: HttpEntity)(implicit transid: TransactionId) = {
 
     def process(body: Option[JsValue], isRawHttpAction: Boolean) = {
-      processRequest(actionOwnerIdentity, action, extension, onBehalfOf, context.withBody(body), isRawHttpAction)
+      processRequest(actionOwnerIdentity, action, main, extension, onBehalfOf, context.withBody(body), isRawHttpAction)
     }
 
     provide(action.annotations.getAs[Boolean](WhiskAction.rawHttpAnnotationName).getOrElse(false)) { isRawHttpAction =>
@@ -595,6 +618,7 @@ trait WhiskWebActionsApi
 
   private def processRequest(actionOwnerIdentity: Identity,
                              action: WhiskActionMetaData,
+                             main: Option[String],
                              responseType: MediaExtension,
                              onBehalfOf: Option[Identity],
                              context: Context,
@@ -611,7 +635,13 @@ trait WhiskWebActionsApi
       if (isRawHttpAction || context
             .overrides(webApiDirectives.reservedProperties ++ action.immutableParameters)) {
         val content = context.toActionArgument(onBehalfOf, isRawHttpAction)
-        invokeAction(actionOwnerIdentity, action, Some(JsObject(content)), maxWaitForWebActionResult, cause = None)
+        invokeAction(
+          actionOwnerIdentity,
+          action,
+          main,
+          Some(JsObject(content)),
+          maxWaitForWebActionResult,
+          cause = None)
       } else {
         Future.failed(RejectRequest(BadRequest, Messages.parametersNotAllowed))
       }

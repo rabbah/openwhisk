@@ -104,6 +104,7 @@ class ContainerProxyTests
   val message = ActivationMessage(
     messageTransId,
     action.fullyQualifiedName(true),
+    None,
     action.rev,
     Identity(Subject(), Namespace(invocationNamespace, uuid), BasicAuthenticationAuthKey(uuid, Secret()), Set.empty),
     ActivationId.generate(),

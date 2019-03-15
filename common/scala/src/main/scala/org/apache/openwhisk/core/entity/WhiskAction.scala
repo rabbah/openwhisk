@@ -166,10 +166,11 @@ case class WhiskAction(namespace: EntityPath,
     }
   }
 
-  def toExecutableWhiskAction: Option[ExecutableWhiskAction] = exec match {
+  def toExecutableWhiskAction(entryPointOverride: Option[String]): Option[ExecutableWhiskAction] = exec match {
     case codeExec: CodeExec[_] =>
+      val ce = entryPointOverride.map(main => codeExec.overrideEntryPoint(main)).getOrElse(codeExec)
       Some(
-        ExecutableWhiskAction(namespace, name, codeExec, parameters, limits, version, publish, annotations)
+        ExecutableWhiskAction(namespace, name, ce, parameters, limits, version, publish, annotations)
           .revision[ExecutableWhiskAction](rev))
     case _ => None
   }
@@ -225,14 +226,15 @@ case class WhiskActionMetaData(namespace: EntityPath,
     }
   }
 
-  def toExecutableWhiskAction = exec match {
-    case execMetaData: ExecMetaData =>
-      Some(
-        ExecutableWhiskActionMetaData(namespace, name, execMetaData, parameters, limits, version, publish, annotations)
-          .revision[ExecutableWhiskActionMetaData](rev))
-    case _ =>
-      None
-  }
+  def toExecutableWhiskAction(entryPointOverride: Option[String] = None): Option[ExecutableWhiskActionMetaData] =
+    exec match {
+      case execMetaData: ExecMetaData =>
+        val ce = entryPointOverride.map(main => execMetaData.overrideEntryPoint(main)).getOrElse(execMetaData)
+        Some(
+          ExecutableWhiskActionMetaData(namespace, name, ce, parameters, limits, version, publish, annotations)
+            .revision[ExecutableWhiskActionMetaData](rev))
+      case _ => None
+    }
 
 }
 
@@ -277,8 +279,10 @@ case class ExecutableWhiskAction(namespace: EntityPath,
    */
   def containerInitializer: JsObject = {
     val code = Option(exec.codeAsJson).filter(_ != JsNull).map("code" -> _)
-    val base =
-      Map("name" -> name.toJson, "binary" -> exec.binary.toJson, "main" -> exec.entryPoint.getOrElse("main").toJson)
+    val base = Map(
+      "name" -> name.toJson,
+      "binary" -> exec.binary.toJson,
+      "main" -> exec.entryPoint.getOrElse(WhiskAction.defaultEntryPoint).toJson)
     JsObject(base ++ code)
   }
 
@@ -315,6 +319,8 @@ object WhiskAction extends DocumentFactory[WhiskAction] with WhiskEntityQueries[
   val requireWhiskAuthAnnotation = "require-whisk-auth"
   val requireWhiskAuthHeader = "x-require-whisk-auth"
   val provideApiKeyAnnotationName = "provide-api-key"
+
+  val defaultEntryPoint = "main"
 
   override val collectionName = "actions"
 

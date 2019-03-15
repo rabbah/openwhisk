@@ -70,28 +70,33 @@ import scala.collection.immutable.Set
 
 @RunWith(classOf[JUnitRunner])
 class WebActionsApiCommonTests extends FlatSpec with Matchers {
-  "extension splitter" should "split action name and extension" in {
-    Seq(".http", ".json", ".text", ".html", ".svg").foreach { ext =>
-      Seq(s"t$ext", s"tt$ext", s"t.wxyz$ext", s"tt.wxyz$ext").foreach { s =>
-        Seq(true, false).foreach { enforce =>
-          val (n, e) = WhiskWebActionsApi.mediaTranscoderForName(s, enforce)
-          val i = s.lastIndexOf(".")
-          n shouldBe s.substring(0, i)
-          e.get.extension shouldBe ext
+  Seq("", "@foo").foreach { main =>
+    "extension splitter" should s"split action name and extension main-override = $main" in {
+      Seq(".http", ".json", ".text", ".html", ".svg").foreach { ext =>
+        Seq(s"t$ext$main", s"tt$ext$main", s"t.wxyz$ext$main", s"tt.wxyz$ext$main").foreach { s =>
+          Seq(true, false).foreach { enforce =>
+            val (n, m, e) = WhiskWebActionsApi.mediaTranscoderForName(s, enforce)
+            val i = s.lastIndexOf(".")
+            n shouldBe s.substring(0, i)
+            m shouldBe (if (main.isEmpty) None else Some("foo"))
+            e.get.extension shouldBe ext
+          }
         }
       }
-    }
 
-    Seq(s"t", "tt", "abcde", "abcdef", "t.wxyz").foreach { s =>
-      val (n, e) = WhiskWebActionsApi.mediaTranscoderForName(s, false)
-      n shouldBe s
-      e.get.extension shouldBe ".http"
-    }
+      Seq(s"t$main", s"tt$main", s"abcde$main", s"abcdef$main", s"t.wxyz$main").foreach { s =>
+        val (n, m, e) = WhiskWebActionsApi.mediaTranscoderForName(s, false)
+        n shouldBe s.split("@")(0)
+        m shouldBe (if (main.isEmpty) None else Some("foo"))
+        e.get.extension shouldBe ".http"
+      }
 
-    Seq(s"t", "tt", "abcde", "abcdef", "t.wxyz").foreach { s =>
-      val (n, e) = WhiskWebActionsApi.mediaTranscoderForName(s, true)
-      n shouldBe s
-      e shouldBe empty
+      Seq(s"t$main", s"tt$main", s"abcde$main", s"abcdef$main", s"t.wxyz$main").foreach { s =>
+        val (n, m, e) = WhiskWebActionsApi.mediaTranscoderForName(s, true)
+        n shouldBe s.split("@")(0)
+        m shouldBe (if (main.isEmpty) None else Some("foo"))
+        e shouldBe empty
+      }
     }
   }
 }
@@ -261,6 +266,7 @@ trait WebActionsApiBaseTests extends ControllerTestCommon with BeforeAndAfterEac
   override protected[controller] def invokeAction(
     user: Identity,
     action: WhiskActionMetaData,
+    main: Option[String],
     payload: Option[JsObject],
     waitForResponse: Option[FiniteDuration],
     cause: Option[ActivationId])(implicit transid: TransactionId): Future[Either[ActivationId, WhiskActivation]] = {

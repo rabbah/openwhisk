@@ -187,6 +187,7 @@ class InvokerSupervisionTests
     val activationMessage = ActivationMessage(
       transid = TransactionId.invokerHealth,
       action = FullyQualifiedEntityName(EntityPath("whisk.system/utils"), EntityName("date")),
+      main = None,
       revision = DocRevision.empty,
       user = Identity(
         Subject("unhealthyInvokerCheck"),

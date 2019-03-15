@@ -225,7 +225,7 @@ class InvokerReactive(
           WhiskAction
             .get(entityStore, actionid.id, actionid.rev, fromCache = actionid.rev != DocRevision.empty)
             .flatMap { action =>
-              action.toExecutableWhiskAction match {
+              action.toExecutableWhiskAction(msg.main) match {
                 case Some(executable) =>
                   pool ! Run(executable, msg)
                   Future.successful(())
@@ -283,6 +283,8 @@ class InvokerReactive(
       Some(Parameters(WhiskActivation.causedByAnnotation, JsString(Exec.SEQUENCE)))
     } else None
 
+    val main = msg.main.map(m => Parameters(WhiskActivation.entryPointAnnotation, JsString(m)))
+
     WhiskActivation(
       activationId = msg.activationId,
       namespace = msg.user.namespace.name.toPath,
@@ -295,7 +297,7 @@ class InvokerReactive(
       duration = Some(0),
       response = response,
       annotations = {
-        Parameters(WhiskActivation.pathAnnotation, JsString(msg.action.asString)) ++ causedBy
+        Parameters(WhiskActivation.pathAnnotation, JsString(msg.action.asString)) ++ main ++ causedBy
       })
   }
 

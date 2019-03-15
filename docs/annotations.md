@@ -82,6 +82,7 @@ and must be present and explicitly set to `true` to have an affect. The annotati
 The system decorates activation records with annotations as well. They are:
 
 * `path`: the fully qualified path name of the action that generated the activation. Note that if this activation was the result of an action in a package binding, the path refers to the parent package.
+* `entry`: the method that was invokes as "main"
 * `kind`: the kind of action executed, and one of the support OpenWhisk runtime kinds.
 * `limits`: the time, memory and log limits that this activation were subject to.
 
@@ -102,6 +103,10 @@ An example of these annotations as they would appear in an activation record is 
   {
     "key": "path",
     "value": "guest/echo"
+  },
+  {
+      "key": "entry",
+      "value": "main"
   },
   {
     "key": "waitTime",

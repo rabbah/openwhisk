@@ -43,6 +43,7 @@ trait Message {
 
 case class ActivationMessage(override val transid: TransactionId,
                              action: FullyQualifiedEntityName,
+                             main: Option[String],
                              revision: DocRevision,
                              user: Identity,
                              activationId: ActivationId,
@@ -68,7 +69,7 @@ object ActivationMessage extends DefaultJsonProtocol {
   def parse(msg: String) = Try(serdes.read(msg.parseJson))
 
   private implicit val fqnSerdes = FullyQualifiedEntityName.serdes
-  implicit val serdes = jsonFormat10(ActivationMessage.apply)
+  implicit val serdes = jsonFormat11(ActivationMessage.apply)
 }
 
 /**

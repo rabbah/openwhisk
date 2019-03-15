@@ -74,6 +74,7 @@ class ContainerPoolTests
     val message = ActivationMessage(
       TransactionId.testing,
       action.fullyQualifiedName(true),
+      None,
       action.rev,
       Identity(Subject(), Namespace(invocationNamespace, uuid), BasicAuthenticationAuthKey(uuid, Secret()), Set.empty),
       ActivationId.generate(),

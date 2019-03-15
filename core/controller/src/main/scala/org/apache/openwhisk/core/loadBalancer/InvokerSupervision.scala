@@ -413,6 +413,7 @@ class InvokerActor(invokerInstance: InvokerInstanceId, controllerInstance: Contr
         // Use the sid of the InvokerSupervisor as tid
         transid = transid,
         action = action.fullyQualifiedName(true),
+        main = None,
         // Use empty DocRevision to force the invoker to pull the action from db all the time
         revision = DocRevision.empty,
         user = InvokerPool.healthActionIdentity,

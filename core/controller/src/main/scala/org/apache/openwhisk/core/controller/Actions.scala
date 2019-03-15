@@ -268,7 +268,7 @@ trait WhiskActionsApi extends WhiskCollectionAPI with PostActionActivation with 
                   .getOrElse(true)
 
                 if (allowInvoke) {
-                  doInvoke(user, actionWithMergedParams, payload, blocking, waitOverride, result)
+                  doInvoke(user, actionWithMergedParams, None, payload, blocking, waitOverride, result)
                 } else {
                   terminate(BadRequest, Messages.parametersNotAllowed)
                 }
@@ -283,12 +283,13 @@ trait WhiskActionsApi extends WhiskCollectionAPI with PostActionActivation with 
 
   private def doInvoke(user: Identity,
                        actionWithMergedParams: WhiskActionMetaData,
+                       main: Option[String],
                        payload: Option[JsObject],
                        blocking: Boolean,
                        waitOverride: FiniteDuration,
                        result: Boolean)(implicit transid: TransactionId): RequestContext => Future[RouteResult] = {
     val waitForResponse = if (blocking) Some(waitOverride) else None
-    onComplete(invokeAction(user, actionWithMergedParams, payload, waitForResponse, cause = None)) {
+    onComplete(invokeAction(user, actionWithMergedParams, main, payload, waitForResponse, cause = None)) {
       case Success(Left(activationId)) =>
         // non-blocking invoke or blocking invoke which got queued instead
         respondWithActivationIdHeader(activationId) {

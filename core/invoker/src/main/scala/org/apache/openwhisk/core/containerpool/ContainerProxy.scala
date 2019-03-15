@@ -727,6 +727,11 @@ object ContainerProxy {
                                totalInterval: Interval,
                                isTimeout: Boolean,
                                response: ActivationResponse) = {
+    // create "main" annotation
+    val main = Parameters(
+      WhiskActivation.entryPointAnnotation,
+      JsString(job.action.exec.entryPoint.getOrElse(WhiskAction.defaultEntryPoint)))
+
     val causedBy = Some {
       if (job.msg.causedBySequence) {
         Parameters(WhiskActivation.causedByAnnotation, JsString(Exec.SEQUENCE))
@@ -764,7 +769,7 @@ object ContainerProxy {
           Parameters(WhiskActivation.pathAnnotation, JsString(job.action.fullyQualifiedName(false).asString)) ++
           Parameters(WhiskActivation.kindAnnotation, JsString(job.action.exec.kind)) ++
           Parameters(WhiskActivation.timeoutAnnotation, JsBoolean(isTimeout)) ++
-          causedBy ++ initTime
+          main ++ causedBy ++ initTime
       })
   }
 }

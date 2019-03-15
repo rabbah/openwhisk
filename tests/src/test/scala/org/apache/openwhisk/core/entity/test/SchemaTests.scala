@@ -556,6 +556,16 @@ class SchemaTests extends FlatSpec with BeforeAndAfter with ExecHelpers with Mat
     }
   }
 
+  it should "allow of main override in action initializer" in {
+    ExecutableWhiskAction(EntityPath("a"), EntityName("b"), jsDefault("")).containerInitializer shouldBe {
+      JsObject("name" -> "b".toJson, "binary" -> false.toJson, "code" -> JsString.empty, "main" -> "main".toJson)
+    }
+
+    ExecutableWhiskAction(EntityPath("a"), EntityName("b"), jsDefault("", Some("bar"))).containerInitializer shouldBe {
+      JsObject("name" -> "b".toJson, "binary" -> false.toJson, "code" -> JsString.empty, "main" -> "bar".toJson)
+    }
+  }
+
   it should "compare as equal two actions even if their revision does not match" in {
     val exec = CodeExecAsString(RuntimeManifest("actionKind", ImageName("testImage")), "testCode", None)
     val actionA = WhiskAction(EntityPath("actionSpace"), EntityName("actionName"), exec)

@@ -92,6 +92,13 @@ sealed abstract class CodeExec[+T <% SizeConversion] extends Exec {
   val binary: Boolean
 
   override def size = code.sizeInBytes + entryPoint.map(_.sizeInBytes).getOrElse(0.B)
+
+  /**
+   * Creates a new exec with a new entry point.
+   *
+   * @param newEntryPoint the new 'main'
+   */
+  def overrideEntryPoint(newEntryPoint: String): CodeExec[T]
 }
 
 sealed abstract class ExecMetaData extends ExecMetaDataBase {
@@ -114,6 +121,13 @@ sealed abstract class ExecMetaData extends ExecMetaDataBase {
   val binary: Boolean
 
   override def size = 0.B
+
+  /**
+   * Creates a new exec with a new entry point.
+   *
+   * @param newEntryPoint the new 'main'
+   */
+  def overrideEntryPoint(newEntryPoint: String): ExecMetaData
 }
 
 trait AttachedCode {
@@ -132,6 +146,7 @@ protected[core] case class CodeExecAsString(manifest: RuntimeManifest,
   override val pull = false
   override lazy val binary = Exec.isBinaryCode(code)
   override def codeAsJson = JsString(code)
+  override def overrideEntryPoint(newEntryPoint: String) = copy(entryPoint = Some(newEntryPoint))
 }
 
 protected[core] case class CodeExecMetaDataAsString(manifest: RuntimeManifest,
@@ -142,6 +157,7 @@ protected[core] case class CodeExecMetaDataAsString(manifest: RuntimeManifest,
   override val image = manifest.image
   override val deprecated = manifest.deprecated.getOrElse(false)
   override val pull = false
+  override def overrideEntryPoint(newEntryPoint: String) = copy(entryPoint = Some(newEntryPoint))
 }
 
 protected[core] case class CodeExecAsAttachment(manifest: RuntimeManifest,
@@ -165,6 +181,8 @@ protected[core] case class CodeExecAsAttachment(manifest: RuntimeManifest,
   override def attach(attached: Attached): CodeExecAsAttachment = {
     copy(code = attached)
   }
+
+  override def overrideEntryPoint(newEntryPoint: String) = copy(entryPoint = Some(newEntryPoint))
 }
 
 protected[core] case class CodeExecMetaDataAsAttachment(manifest: RuntimeManifest,
@@ -175,6 +193,7 @@ protected[core] case class CodeExecMetaDataAsAttachment(manifest: RuntimeManifes
   override val image = manifest.image
   override val deprecated = manifest.deprecated.getOrElse(false)
   override val pull = false
+  override def overrideEntryPoint(newEntryPoint: String) = copy(entryPoint = Some(newEntryPoint))
 }
 
 /**
@@ -203,6 +222,8 @@ protected[core] case class BlackBoxExec(override val image: ImageName,
   override def attach(attached: Attached): BlackBoxExec = {
     copy(code = Some(attached))
   }
+
+  override def overrideEntryPoint(newEntryPoint: String) = copy(entryPoint = Some(newEntryPoint))
 }
 
 protected[core] case class BlackBoxExecMetaData(override val image: ImageName,
@@ -213,6 +234,7 @@ protected[core] case class BlackBoxExecMetaData(override val image: ImageName,
   override val kind = ExecMetaDataBase.BLACKBOX
   override val deprecated = false
   override val pull = !native
+  override def overrideEntryPoint(newEntryPoint: String) = copy(entryPoint = Some(newEntryPoint))
 }
 
 protected[core] case class SequenceExec(components: Vector[FullyQualifiedEntityName]) extends Exec {

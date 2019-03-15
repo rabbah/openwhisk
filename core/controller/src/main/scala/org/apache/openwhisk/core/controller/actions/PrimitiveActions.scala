@@ -171,6 +171,7 @@ protected[actions] trait PrimitiveActions {
     val message = ActivationMessage(
       transid,
       FullyQualifiedEntityName(action.namespace, action.name, Some(action.version)),
+      action.exec.entryPoint,
       action.rev,
       user,
       activationId, // activation id created here
@@ -440,7 +441,7 @@ protected[actions] trait PrimitiveActions {
   private def invokeComponent(user: Identity, action: WhiskActionMetaData, payload: Option[JsObject], session: Session)(
     implicit transid: TransactionId): Future[ActivationResponse] = {
 
-    val exec = action.toExecutableWhiskAction
+    val exec = action.toExecutableWhiskAction()
     val activationResponse: Future[Either[ActivationId, WhiskActivation]] = exec match {
       case Some(action) if action.annotations.isTruthy(WhiskActivation.conductorAnnotation) => // composition
         // invokeComposition will increase the invocation counts
@@ -451,6 +452,7 @@ protected[actions] trait PrimitiveActions {
           waitForResponse = None, // not topmost, hence blocking, no need for timeout
           cause = Some(session.activationId),
           accounting = Some(session.accounting))
+
       case Some(action) => // primitive action
         session.accounting.components += 1
         invokeSimpleAction(
@@ -459,6 +461,7 @@ protected[actions] trait PrimitiveActions {
           payload,
           waitForResponse = Some(action.limits.timeout.duration + 1.minute),
           cause = Some(session.activationId))
+
       case None => // sequence
         session.accounting.components += 1
         val SequenceExecMetaData(components) = action.exec
@@ -529,6 +532,11 @@ protected[actions] trait PrimitiveActions {
 
     val context = UserContext(user)
 
+    // create "main" annotation
+    val main = Parameters(
+      WhiskActivation.entryPointAnnotation,
+      JsString(session.action.exec.entryPoint.getOrElse(WhiskAction.defaultEntryPoint)))
+
     // compute max memory
     val sequenceLimits = Parameters(
       WhiskActivation.limitsAnnotation,
@@ -558,6 +566,7 @@ protected[actions] trait PrimitiveActions {
         Parameters(WhiskActivation.pathAnnotation, JsString(session.action.fullyQualifiedName(false).asString)) ++
         Parameters(WhiskActivation.kindAnnotation, JsString(Exec.SEQUENCE)) ++
         Parameters(WhiskActivation.conductorAnnotation, JsBoolean(true)) ++
+        main ++
         causedBy ++
         sequenceLimits,
       duration = Some(session.duration))
