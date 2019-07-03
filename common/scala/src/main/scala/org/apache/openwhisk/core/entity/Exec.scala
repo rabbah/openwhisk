@@ -55,10 +55,6 @@ sealed abstract class Exec extends ByteSizeable {
   val deprecated: Boolean
 }
 
-sealed abstract class ExecMetaDataBase extends Exec {
-  override def toString: String = ExecMetaDataBase.serdes.write(this).compactPrint
-}
-
 /**
  * A common super class for all action exec types that contain their executable
  * code explicitly (i.e., any action other than a sequence).
@@ -94,28 +90,6 @@ sealed abstract class CodeExec[+T <% SizeConversion] extends Exec {
   override def size = code.sizeInBytes + entryPoint.map(_.sizeInBytes).getOrElse(0.B)
 }
 
-sealed abstract class ExecMetaData extends ExecMetaDataBase {
-
-  /** An entrypoint (typically name of 'main' function). 'None' means a default value will be used. */
-  val entryPoint: Option[String]
-
-  /** The runtime image (either built-in or a public image). */
-  val image: ImageName
-
-  /** Indicates if a container image is required from the registry to execute the action. */
-  val pull: Boolean
-
-  /**
-   * Indicates whether the code is stored in a text-readable or binary format.
-   * The binary bit may be read from the database but currently it is always computed
-   * when the "code" is moved to an attachment this may get changed to avoid recomputing
-   * the binary property.
-   */
-  val binary: Boolean
-
-  override def size = 0.B
-}
-
 trait AttachedCode {
   def inline(bytes: Array[Byte]): Exec
   def attach(attached: Attached): Exec
@@ -132,16 +106,6 @@ protected[core] case class CodeExecAsString(manifest: RuntimeManifest,
   override val pull = false
   override lazy val binary = Exec.isBinaryCode(code)
   override def codeAsJson = JsString(code)
-}
-
-protected[core] case class CodeExecMetaDataAsString(manifest: RuntimeManifest,
-                                                    override val binary: Boolean = false,
-                                                    override val entryPoint: Option[String])
-    extends ExecMetaData {
-  override val kind = manifest.kind
-  override val image = manifest.image
-  override val deprecated = manifest.deprecated.getOrElse(false)
-  override val pull = false
 }
 
 protected[core] case class CodeExecAsAttachment(manifest: RuntimeManifest,
@@ -165,16 +129,6 @@ protected[core] case class CodeExecAsAttachment(manifest: RuntimeManifest,
   override def attach(attached: Attached): CodeExecAsAttachment = {
     copy(code = attached)
   }
-}
-
-protected[core] case class CodeExecMetaDataAsAttachment(manifest: RuntimeManifest,
-                                                        override val binary: Boolean = false,
-                                                        override val entryPoint: Option[String])
-    extends ExecMetaData {
-  override val kind = manifest.kind
-  override val image = manifest.image
-  override val deprecated = manifest.deprecated.getOrElse(false)
-  override val pull = false
 }
 
 /**
@@ -205,24 +159,8 @@ protected[core] case class BlackBoxExec(override val image: ImageName,
   }
 }
 
-protected[core] case class BlackBoxExecMetaData(override val image: ImageName,
-                                                override val entryPoint: Option[String],
-                                                val native: Boolean,
-                                                override val binary: Boolean = false)
-    extends ExecMetaData {
-  override val kind = ExecMetaDataBase.BLACKBOX
-  override val deprecated = false
-  override val pull = !native
-}
-
 protected[core] case class SequenceExec(components: Vector[FullyQualifiedEntityName]) extends Exec {
   override val kind = Exec.SEQUENCE
-  override val deprecated = false
-  override def size = components.map(_.size).reduceOption(_ + _).getOrElse(0.B)
-}
-
-protected[core] case class SequenceExecMetaData(components: Vector[FullyQualifiedEntityName]) extends ExecMetaDataBase {
-  override val kind = ExecMetaDataBase.SEQUENCE
   override val deprecated = false
   override def size = components.map(_.size).reduceOption(_ + _).getOrElse(0.B)
 }
@@ -367,111 +305,6 @@ object Exec extends ArgNormalizer[Exec] with DefaultJsonProtocol {
     code match {
       case JsString(c) => isBinaryCode(c)
       case _           => obj.fields.get("binary").map(_.convertTo[Boolean]).getOrElse(false)
-    }
-  }
-}
-
-protected[core] object ExecMetaDataBase extends ArgNormalizer[ExecMetaDataBase] with DefaultJsonProtocol {
-
-  // The possible values of the JSON 'kind' field for certain runtimes:
-  // - Sequence because it is an intrinsic
-  // - Black Box because it is a type marker
-  protected[core] val SEQUENCE = "sequence"
-  protected[core] val BLACKBOX = "blackbox"
-
-  private def execManifests = ExecManifest.runtimesManifest
-
-  override protected[core] implicit lazy val serdes = new RootJsonFormat[ExecMetaDataBase] {
-    private def attFmt[T: JsonFormat] = Attachments.serdes[T]
-    private lazy val runtimes: Set[String] = execManifests.knownContainerRuntimes ++ Set(SEQUENCE, BLACKBOX)
-
-    override def write(e: ExecMetaDataBase) = e match {
-      case c: CodeExecMetaDataAsString =>
-        val base = Map("kind" -> JsString(c.kind), "binary" -> JsBoolean(c.binary))
-        val main = c.entryPoint.map("main" -> JsString(_))
-        JsObject(base ++ main)
-
-      case a: CodeExecMetaDataAsAttachment =>
-        val base =
-          Map("kind" -> JsString(a.kind), "binary" -> JsBoolean(a.binary))
-        val main = a.entryPoint.map("main" -> JsString(_))
-        JsObject(base ++ main)
-
-      case s @ SequenceExecMetaData(comp) =>
-        JsObject("kind" -> JsString(s.kind), "components" -> comp.map(_.qualifiedNameWithLeadingSlash).toJson)
-
-      case b: BlackBoxExecMetaData =>
-        val base =
-          Map(
-            "kind" -> JsString(b.kind),
-            "image" -> JsString(b.image.resolveImageName()),
-            "binary" -> JsBoolean(b.binary))
-        val main = b.entryPoint.map("main" -> JsString(_))
-        JsObject(base ++ main)
-    }
-
-    override def read(v: JsValue) = {
-      require(v != null)
-
-      val obj = v.asJsObject
-
-      val kind = obj.fields.get("kind") match {
-        case Some(JsString(k)) => k.trim.toLowerCase
-        case _                 => throw new DeserializationException("'kind' must be a string defined in 'exec'")
-      }
-
-      lazy val optMainField: Option[String] = obj.fields.get("main") match {
-        case Some(JsString(m)) => Some(m)
-        case Some(_) =>
-          throw new DeserializationException(s"if defined, 'main' be a string in 'exec' for '$kind' actions")
-        case None => None
-      }
-
-      lazy val binary: Boolean = obj.fields.get("binary") match {
-        case Some(JsBoolean(b)) => b
-        case _                  => throw new DeserializationException("'binary' must be a boolean defined in 'exec'")
-      }
-
-      kind match {
-        case ExecMetaDataBase.SEQUENCE =>
-          val comp: Vector[FullyQualifiedEntityName] = obj.fields.get("components") match {
-            case Some(JsArray(components)) => components map (FullyQualifiedEntityName.serdes.read(_))
-            case Some(_)                   => throw new DeserializationException(s"'components' must be an array")
-            case None                      => throw new DeserializationException(s"'components' must be defined for sequence kind")
-          }
-          SequenceExecMetaData(comp)
-
-        case ExecMetaDataBase.BLACKBOX =>
-          val image: ImageName = obj.fields.get("image") match {
-            case Some(JsString(i)) => ImageName.fromString(i).get // throws deserialization exception on failure
-            case _ =>
-              throw new DeserializationException(
-                s"'image' must be a string defined in 'exec' for '${Exec.BLACKBOX}' actions")
-          }
-          val native = execManifests.skipDockerPull(image)
-          BlackBoxExecMetaData(image, optMainField, native, binary)
-
-        case _ =>
-          // map "default" virtual runtime versions to the currently blessed actual runtime version
-          val manifest = execManifests.resolveDefaultRuntime(kind) match {
-            case Some(k) => k
-            case None    => throw new DeserializationException(s"kind '$kind' not in $runtimes")
-          }
-
-          manifest.attached
-            .map { a =>
-              val main = optMainField.orElse {
-                if (manifest.requireMain.exists(identity)) {
-                  throw new DeserializationException(s"'main' must be a string defined in 'exec' for '$kind' actions")
-                } else None
-              }
-
-              CodeExecMetaDataAsAttachment(manifest, binary, main)
-            }
-            .getOrElse {
-              CodeExecMetaDataAsString(manifest, binary, optMainField)
-            }
-      }
     }
   }
 }

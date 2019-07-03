@@ -68,35 +68,11 @@ trait ExecHelpers extends Matchers with WskActorSystem with StreamLogging {
     js10(code, main)
   }
 
-  protected def js10MetaDataOld(main: Option[String] = None, binary: Boolean) = {
-    CodeExecMetaDataAsString(
-      RuntimeManifest(
-        NODEJS10,
-        imageName(NODEJS10),
-        default = Some(true),
-        deprecated = Some(false),
-        stemCells = Some(List(StemCell(2, 256.MB)))),
-      binary,
-      main.map(_.trim))
-  }
-
-  protected def js10MetaData(main: Option[String] = None, binary: Boolean) = {
-    val manifest = ExecManifest.runtimesManifest.resolveDefaultRuntime(NODEJS10).get
-
-    CodeExecMetaDataAsAttachment(manifest, binary, main.map(_.trim))
-  }
-
   protected def javaDefault(code: String, main: Option[String] = None) = {
     val attachment = attFmt[String].read(code.trim.toJson)
     val manifest = ExecManifest.runtimesManifest.resolveDefaultRuntime(JAVA_DEFAULT).get
 
     CodeExecAsAttachment(manifest, attachment, main.map(_.trim), Exec.isBinaryCode(code))
-  }
-
-  protected def javaMetaData(main: Option[String] = None, binary: Boolean) = {
-    val manifest = ExecManifest.runtimesManifest.resolveDefaultRuntime(JAVA_DEFAULT).get
-
-    CodeExecMetaDataAsAttachment(manifest, binary, main.map(_.trim))
   }
 
   protected def swift(code: String, main: Option[String] = None) = {
@@ -108,8 +84,6 @@ trait ExecHelpers extends Matchers with WskActorSystem with StreamLogging {
 
   protected def sequence(components: Vector[FullyQualifiedEntityName]) = SequenceExec(components)
 
-  protected def sequenceMetaData(components: Vector[FullyQualifiedEntityName]) = SequenceExecMetaData(components)
-
   protected def bb(image: String) = BlackBoxExec(ExecManifest.ImageName(trim(image)), None, None, false, false)
 
   protected def bb(image: String, code: String, main: Option[String] = None) = {
@@ -117,10 +91,6 @@ trait ExecHelpers extends Matchers with WskActorSystem with StreamLogging {
       if (code.trim.nonEmpty) (Some(attFmt[String].read(code.toJson)), Exec.isBinaryCode(code))
       else (None, false)
     BlackBoxExec(ExecManifest.ImageName(trim(image)), codeOpt, main, false, binary)
-  }
-
-  protected def blackBoxMetaData(image: String, main: Option[String] = None, binary: Boolean) = {
-    BlackBoxExecMetaData(ExecManifest.ImageName(trim(image)), main, false, binary)
   }
 
   protected def actionLimits(memory: ByteSize, concurrency: Int): ActionLimits =

@@ -36,7 +36,6 @@ import org.apache.openwhisk.core.connector.MessagingProvider
 import org.apache.openwhisk.core.entity.CacheKey
 import org.apache.openwhisk.core.entity.ControllerInstanceId
 import org.apache.openwhisk.core.entity.WhiskAction
-import org.apache.openwhisk.core.entity.WhiskActionMetaData
 import org.apache.openwhisk.core.entity.WhiskPackage
 import org.apache.openwhisk.core.entity.WhiskRule
 import org.apache.openwhisk.core.entity.WhiskTrigger
@@ -78,8 +77,8 @@ class RemoteCacheInvalidation(config: WhiskConfig, component: String, instance: 
       removeFromLocalCache)
   })
 
-  def invalidateWhiskActionMetaData(key: CacheKey) =
-    WhiskActionMetaData.removeId(key)
+  def invalidateWhiskAction(key: CacheKey) =
+    WhiskAction.removeId(key)
 
   private def removeFromLocalCache(bytes: Array[Byte]): Future[Unit] = Future {
     val raw = new String(bytes, StandardCharsets.UTF_8)
@@ -87,7 +86,6 @@ class RemoteCacheInvalidation(config: WhiskConfig, component: String, instance: 
     CacheInvalidationMessage.parse(raw) match {
       case Success(msg: CacheInvalidationMessage) => {
         if (msg.instanceId != instanceId) {
-          WhiskActionMetaData.removeId(msg.key)
           WhiskAction.removeId(msg.key)
           WhiskPackage.removeId(msg.key)
           WhiskRule.removeId(msg.key)

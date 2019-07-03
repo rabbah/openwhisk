@@ -253,7 +253,7 @@ class ShardingContainerPoolBalancer(
   override def clusterSize: Int = schedulingState.clusterSize
 
   /** 1. Publish a message to the loadbalancer */
-  override def publish(action: ExecutableWhiskActionMetaData, msg: ActivationMessage)(
+  override def publish(action: ExecutableWhiskAction, msg: ActivationMessage)(
     implicit transid: TransactionId): Future[Future[Either[ActivationId, WhiskActivation]]] = {
 
     val isBlackboxInvocation = action.exec.pull

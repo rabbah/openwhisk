@@ -77,7 +77,7 @@ protected[actions] trait PrimitiveActions {
   /** A method that knows how to invoke a sequence of actions. */
   protected[actions] def invokeSequence(
     user: Identity,
-    action: WhiskActionMetaData,
+    action: WhiskAction,
     components: Vector[FullyQualifiedEntityName],
     payload: Option[JsObject],
     waitForOutermostResponse: Option[FiniteDuration],
@@ -107,7 +107,7 @@ protected[actions] trait PrimitiveActions {
    */
   protected[actions] def invokeSingleAction(
     user: Identity,
-    action: ExecutableWhiskActionMetaData,
+    action: ExecutableWhiskAction,
     payload: Option[JsObject],
     waitForResponse: Option[FiniteDuration],
     cause: Option[ActivationId])(implicit transid: TransactionId): Future[Either[ActivationId, WhiskActivation]] = {
@@ -150,7 +150,7 @@ protected[actions] trait PrimitiveActions {
    */
   private def invokeSimpleAction(
     user: Identity,
-    action: ExecutableWhiskActionMetaData,
+    action: ExecutableWhiskAction,
     payload: Option[JsObject],
     waitForResponse: Option[FiniteDuration],
     cause: Option[ActivationId])(implicit transid: TransactionId): Future[Either[ActivationId, WhiskActivation]] = {
@@ -241,7 +241,7 @@ protected[actions] trait PrimitiveActions {
    */
   private case class Session(activationId: ActivationId,
                              start: Instant,
-                             action: ExecutableWhiskActionMetaData,
+                             action: ExecutableWhiskAction,
                              cause: Option[ActivationId],
                              var duration: Long,
                              var maxMemory: ByteSize,
@@ -268,7 +268,7 @@ protected[actions] trait PrimitiveActions {
    *            Left(ActivationId) if not waiting for a response, or allowed duration has elapsed without a result ready
    */
   private def invokeComposition(user: Identity,
-                                action: ExecutableWhiskActionMetaData,
+                                action: ExecutableWhiskAction,
                                 payload: Option[JsObject],
                                 waitForResponse: Option[FiniteDuration],
                                 cause: Option[ActivationId],
@@ -400,7 +400,7 @@ protected[actions] trait PrimitiveActions {
       .check(user, Privilege.ACTIVATE, Set(resource), noThrottle = true)
       .flatMap { _ =>
         // successful entitlement check
-        WhiskActionMetaData
+        WhiskAction
           .resolveActionAndMergeParameters(entityStore, fqn)
           .flatMap {
             case next =>
@@ -438,7 +438,7 @@ protected[actions] trait PrimitiveActions {
    * @param session the session object for this composition
    * @param transid a transaction id for logging
    */
-  private def invokeComponent(user: Identity, action: WhiskActionMetaData, payload: Option[JsObject], session: Session)(
+  private def invokeComponent(user: Identity, action: WhiskAction, payload: Option[JsObject], session: Session)(
     implicit transid: TransactionId): Future[ActivationResponse] = {
 
     val exec = action.toExecutableWhiskAction
@@ -462,7 +462,7 @@ protected[actions] trait PrimitiveActions {
           cause = Some(session.activationId))
       case None => // sequence
         session.accounting.components += 1
-        val SequenceExecMetaData(components) = action.exec
+        val SequenceExec(components) = action.exec
         invokeSequence(
           user,
           action,

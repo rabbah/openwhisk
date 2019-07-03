@@ -113,7 +113,7 @@ abstract class CommonLoadBalancer(config: WhiskConfig,
    * Once the completion ack arrives, activationSlots entry will be removed.
    */
   protected def setupActivation(msg: ActivationMessage,
-                                action: ExecutableWhiskActionMetaData,
+                                action: ExecutableWhiskAction,
                                 instance: InvokerInstanceId): Future[Either[ActivationId, WhiskActivation]] = {
 
     // Needed for emitting metrics.

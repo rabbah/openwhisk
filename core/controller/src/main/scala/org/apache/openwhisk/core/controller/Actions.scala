@@ -241,11 +241,11 @@ trait WhiskActionsApi extends WhiskCollectionAPI with PostActionActivation with 
       'timeout.as[FiniteDuration] ? controllerActivationConfig.maxWaitForBlockingActivation) {
       (blocking, result, waitOverride) =>
         entity(as[Option[JsObject]]) { payload =>
-          getEntity(WhiskActionMetaData.resolveActionAndMergeParameters(entityStore, entityName), Some {
-            act: WhiskActionMetaData =>
+          getEntity(WhiskAction.resolveActionAndMergeParameters(entityStore, entityName), Some {
+            act: WhiskAction =>
               // resolve the action --- special case for sequences that may contain components with '_' as default package
               val action = act.resolve(user.namespace)
-              onComplete(entitleReferencedEntitiesMetaData(user, Privilege.ACTIVATE, Some(action.exec))) {
+              onComplete(entitleReferencedEntities(user, Privilege.ACTIVATE, Some(action.exec))) {
                 case Success(_) =>
                   val actionWithMergedParams = env.map(action.inherit(_)) getOrElse action
 
@@ -270,7 +270,7 @@ trait WhiskActionsApi extends WhiskCollectionAPI with PostActionActivation with 
   }
 
   private def doInvoke(user: Identity,
-                       actionWithMergedParams: WhiskActionMetaData,
+                       actionWithMergedParams: WhiskAction,
                        payload: Option[JsObject],
                        blocking: Boolean,
                        waitOverride: FiniteDuration,
@@ -341,22 +341,21 @@ trait WhiskActionsApi extends WhiskCollectionAPI with PostActionActivation with 
   override def fetch(user: Identity, entityName: FullyQualifiedEntityName, env: Option[Parameters])(
     implicit transid: TransactionId) = {
     parameter('code ? true) { code =>
-      code match {
-        case true =>
-          getEntity(WhiskAction.resolveActionAndMergeParameters(entityStore, entityName), Some { action: WhiskAction =>
-            val mergedAction = env map {
-              action inherit _
-            } getOrElse action
-            complete(OK, mergedAction)
-          })
-        case false =>
-          getEntity(WhiskActionMetaData.resolveActionAndMergeParameters(entityStore, entityName), Some {
-            action: WhiskActionMetaData =>
-              val mergedAction = env map {
-                action inherit _
-              } getOrElse action
-              complete(OK, mergedAction)
-          })
+      if (code) {
+        // TODO get attachment
+        getEntity(WhiskAction.resolveActionAndMergeParameters(entityStore, entityName), Some { action: WhiskAction =>
+          val mergedAction = env map {
+            action inherit _
+          } getOrElse action
+          complete(OK, mergedAction)
+        })
+      } else {
+        getEntity(WhiskAction.resolveActionAndMergeParameters(entityStore, entityName), Some { action: WhiskAction =>
+          val mergedAction = env map {
+            action inherit _
+          } getOrElse action
+          complete(OK, mergedAction)
+        })
       }
     }
   }
@@ -446,16 +445,6 @@ trait WhiskActionsApi extends WhiskCollectionAPI with PostActionActivation with 
     exec match {
       case Some(seq: SequenceExec) =>
         logging.debug(this, "checking if sequence components are accessible")
-        entitlementProvider.check(user, right, referencedEntities(seq), noThrottle = true)
-      case _ => Future.successful(true)
-    }
-  }
-
-  private def entitleReferencedEntitiesMetaData(user: Identity, right: Privilege, exec: Option[ExecMetaDataBase])(
-    implicit transid: TransactionId) = {
-    exec match {
-      case Some(seq: SequenceExecMetaData) =>
-        logging.info(this, "checking if sequence components are accessible")
         entitlementProvider.check(user, right, referencedEntities(seq), noThrottle = true)
       case _ => Future.successful(true)
     }

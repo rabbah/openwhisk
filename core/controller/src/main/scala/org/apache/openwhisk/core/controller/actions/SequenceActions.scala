@@ -67,7 +67,7 @@ protected[actions] trait SequenceActions {
   /** A method that knows how to invoke a single primitive action. */
   protected[actions] def invokeAction(
     user: Identity,
-    action: WhiskActionMetaData,
+    action: WhiskAction,
     payload: Option[JsObject],
     waitForResponse: Option[FiniteDuration],
     cause: Option[ActivationId])(implicit transid: TransactionId): Future[Either[ActivationId, WhiskActivation]]
@@ -88,7 +88,7 @@ protected[actions] trait SequenceActions {
    */
   protected[actions] def invokeSequence(
     user: Identity,
-    action: WhiskActionMetaData,
+    action: WhiskAction,
     components: Vector[FullyQualifiedEntityName],
     payload: Option[JsObject],
     waitForOutermostResponse: Option[FiniteDuration],
@@ -150,7 +150,7 @@ protected[actions] trait SequenceActions {
   private def completeSequenceActivation(seqActivationId: ActivationId,
                                          futureSeqResult: Future[SequenceAccounting],
                                          user: Identity,
-                                         action: WhiskActionMetaData,
+                                         action: WhiskAction,
                                          topmost: Boolean,
                                          start: Instant,
                                          cause: Option[ActivationId])(
@@ -187,7 +187,7 @@ protected[actions] trait SequenceActions {
    * Creates an activation for a sequence.
    */
   private def makeSequenceActivation(user: Identity,
-                                     action: WhiskActionMetaData,
+                                     action: WhiskAction,
                                      activationId: ActivationId,
                                      accounting: SequenceAccounting,
                                      topmost: Boolean,
@@ -250,7 +250,7 @@ protected[actions] trait SequenceActions {
    */
   private def invokeSequenceComponents(
     user: Identity,
-    seqAction: WhiskActionMetaData,
+    seqAction: WhiskAction,
     seqActivationId: ActivationId,
     inputPayload: Option[JsObject],
     components: Vector[FullyQualifiedEntityName],
@@ -266,7 +266,7 @@ protected[actions] trait SequenceActions {
     // This action/parameter resolution is done in futures; the execution starts as soon as the first component
     // is resolved.
     val resolvedFutureActions = resolveDefaultNamespace(components, user) map { c =>
-      WhiskActionMetaData.resolveActionAndMergeParameters(entityStore, c)
+      WhiskAction.resolveActionAndMergeParameters(entityStore, c)
     }
 
     // this holds the initial value of the accounting structure, including the input boxed as an ActivationResponse
@@ -323,7 +323,7 @@ protected[actions] trait SequenceActions {
    */
   private def invokeNextAction(
     user: Identity,
-    futureAction: Future[WhiskActionMetaData],
+    futureAction: Future[WhiskAction],
     accounting: SequenceAccounting,
     cause: Option[ActivationId])(implicit transid: TransactionId): Future[SequenceAccounting] = {
     futureAction.flatMap { action =>
@@ -336,7 +336,7 @@ protected[actions] trait SequenceActions {
       // invoke the action by calling the right method depending on whether it's an atomic action or a sequence
       val futureWhiskActivationTuple = action.toExecutableWhiskAction match {
         case None =>
-          val SequenceExecMetaData(components) = action.exec
+          val SequenceExec(components) = action.exec
           logging.debug(this, s"sequence invoking an enclosed sequence $action")
           // call invokeSequence to invoke the inner sequence; this is a blocking activation by definition
           invokeSequence(

@@ -546,7 +546,7 @@ trait WhiskWebActionsApi
   }
 
   private def extractEntityAndProcessRequest(actionOwnerIdentity: Identity,
-                                             action: WhiskActionMetaData,
+                                             action: WhiskAction,
                                              extension: MediaExtension,
                                              onBehalfOf: Option[Identity],
                                              context: Context,
@@ -594,7 +594,7 @@ trait WhiskWebActionsApi
   }
 
   private def processRequest(actionOwnerIdentity: Identity,
-                             action: WhiskActionMetaData,
+                             action: WhiskAction,
                              responseType: MediaExtension,
                              onBehalfOf: Option[Identity],
                              context: Context,
@@ -679,8 +679,8 @@ trait WhiskWebActionsApi
    * @return future action document or NotFound rejection
    */
   private def actionLookup(actionName: FullyQualifiedEntityName)(
-    implicit transid: TransactionId): Future[WhiskActionMetaData] = {
-    WhiskActionMetaData.resolveActionAndMergeParameters(entityStore, actionName) recoverWith {
+    implicit transid: TransactionId): Future[WhiskAction] = {
+    WhiskAction.resolveActionAndMergeParameters(entityStore, actionName) recoverWith {
       case _: ArtifactStoreException | DeserializationException(_, _, _) =>
         Future.failed(RejectRequest(NotFound))
     }
@@ -702,8 +702,8 @@ trait WhiskWebActionsApi
   /**
    * Checks if an action is exported (i.e., carries the required annotation).
    */
-  private def confirmExportedAction(actionLookup: Future[WhiskActionMetaData], authenticated: Boolean)(
-    implicit transid: TransactionId): Future[WhiskActionMetaData] = {
+  private def confirmExportedAction(actionLookup: Future[WhiskAction], authenticated: Boolean)(
+    implicit transid: TransactionId): Future[WhiskAction] = {
     actionLookup flatMap { action =>
       val requiresAuthenticatedUser =
         action.annotations.getAs[Boolean](Annotations.RequireWhiskAuthAnnotation).getOrElse(false)
@@ -726,7 +726,7 @@ trait WhiskWebActionsApi
   /**
    * Checks if an action is executable.
    */
-  private def checkEntitlement(identity: Identity, action: WhiskActionMetaData)(
+  private def checkEntitlement(identity: Identity, action: WhiskAction)(
     implicit transid: TransactionId): Future[Unit] = {
 
     val fqn = action.fullyQualifiedName(false)

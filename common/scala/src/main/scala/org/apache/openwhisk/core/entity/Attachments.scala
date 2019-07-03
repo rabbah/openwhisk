@@ -88,11 +88,11 @@ object Attachments {
 
     def read(js: JsValue): Attachment[T] =
       Try {
-        Inline(sub.read(js))
+        Attached.serdes.read(js)
       } recover {
-        case _: DeserializationException => Attached.serdes.read(js)
+        case _: DeserializationException => Inline(sub.read(js))
       } getOrElse {
-        throw new DeserializationException("Could not deserialize as attachment record: " + js)
+        throw new DeserializationException("Could not deserialize as attachment or inline record: " + js)
       }
   }
 }

@@ -322,7 +322,7 @@ class ConductorsApiTests extends ControllerTestCommon with WhiskActionsApi {
   class FakeLoadBalancerService(config: WhiskConfig)(implicit ec: ExecutionContext)
       extends DegenerateLoadBalancerService(config) {
 
-    private def respond(action: ExecutableWhiskActionMetaData, msg: ActivationMessage, result: JsObject) = {
+    private def respond(action: ExecutableWhiskAction, msg: ActivationMessage, result: JsObject) = {
       val response =
         if (result.fields.get("error") isDefined) ActivationResponse(ActivationResponse.ApplicationError, Some(result))
         else ActivationResponse.success(Some(result))
@@ -337,7 +337,7 @@ class ConductorsApiTests extends ControllerTestCommon with WhiskActionsApi {
         response = response)
     }
 
-    override def publish(action: ExecutableWhiskActionMetaData, msg: ActivationMessage)(
+    override def publish(action: ExecutableWhiskAction, msg: ActivationMessage)(
       implicit transid: TransactionId): Future[Future[Either[ActivationId, WhiskActivation]]] =
       msg.content map { args =>
         Future.successful {

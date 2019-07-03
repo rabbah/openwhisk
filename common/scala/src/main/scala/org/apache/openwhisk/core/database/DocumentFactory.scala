@@ -171,24 +171,6 @@ trait DocumentFactory[W <: DocumentRevisionProvider] extends MultipleReadersSing
     cacheLookup(CacheKey(key), db.get[W](key, None), fromCache)
   }
 
-  /**
-   *  Fetches document along with attachment. `postProcess` would be used to process the fetched document
-   *  before adding it to cache. This ensures that for documents having attachment the cache is updated only
-   *  post fetch of the attachment
-   */
-  protected def getWithAttachment[Wsuper >: W](
-    db: ArtifactStore[Wsuper],
-    doc: DocId,
-    rev: DocRevision = DocRevision.empty,
-    fromCache: Boolean,
-    attachmentHandler: (W, Attached) => W,
-    postProcess: W => Future[W])(implicit transid: TransactionId, mw: Manifest[W]): Future[W] = {
-    implicit val logger = db.logging
-    implicit val ec = db.executionContext
-    val key = doc.asDocInfo(rev)
-    cacheLookup(CacheKey(key), db.get[W](key, Some(attachmentHandler)).flatMap(postProcess), fromCache)
-  }
-
   protected def getAttachment[Wsuper >: W](
     db: ArtifactStore[Wsuper],
     doc: W,

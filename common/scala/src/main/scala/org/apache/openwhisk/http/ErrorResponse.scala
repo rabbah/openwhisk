@@ -35,7 +35,6 @@ import org.apache.openwhisk.common.TransactionId
 import org.apache.openwhisk.core.entity.SizeError
 import org.apache.openwhisk.core.entity.ByteSize
 import org.apache.openwhisk.core.entity.Exec
-import org.apache.openwhisk.core.entity.ExecMetaDataBase
 import org.apache.openwhisk.core.entity.ActivationId
 
 object Messages {
@@ -54,12 +53,6 @@ object Messages {
    * Standard message for reporting deprecated runtimes.
    */
   def runtimeDeprecated(e: Exec) =
-    s"The '${e.kind}' runtime is no longer supported. You may read and delete but not update or invoke this action."
-
-  /**
-   * Standard message for reporting deprecated runtimes.
-   */
-  def runtimeDeprecated(e: ExecMetaDataBase) =
     s"The '${e.kind}' runtime is no longer supported. You may read and delete but not update or invoke this action."
 
   /** Standard message for resource not found. */

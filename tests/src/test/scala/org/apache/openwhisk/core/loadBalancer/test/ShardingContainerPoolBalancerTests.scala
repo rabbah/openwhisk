@@ -47,24 +47,9 @@ import org.apache.openwhisk.core.connector.Message
 import org.apache.openwhisk.core.connector.MessageConsumer
 import org.apache.openwhisk.core.connector.MessageProducer
 import org.apache.openwhisk.core.connector.MessagingProvider
-import org.apache.openwhisk.core.entity.ActivationId
-import org.apache.openwhisk.core.entity.BasicAuthenticationAuthKey
-import org.apache.openwhisk.core.entity.ControllerInstanceId
-import org.apache.openwhisk.core.entity.EntityName
-import org.apache.openwhisk.core.entity.EntityPath
-import org.apache.openwhisk.core.entity.ExecManifest
-import org.apache.openwhisk.core.entity.Identity
-import org.apache.openwhisk.core.entity.InvokerInstanceId
-import org.apache.openwhisk.core.entity.MemoryLimit
-import org.apache.openwhisk.core.entity.Namespace
-import org.apache.openwhisk.core.entity.Secret
-import org.apache.openwhisk.core.entity.Subject
-import org.apache.openwhisk.core.entity.UUID
-import org.apache.openwhisk.core.entity.WhiskActionMetaData
+import org.apache.openwhisk.core.entity._
 import org.apache.openwhisk.core.entity.test.ExecHelpers
-import org.apache.openwhisk.core.entity.ByteSize
 import org.apache.openwhisk.core.entity.size._
-import org.apache.openwhisk.core.entity.test.ExecHelpers
 import org.apache.openwhisk.core.loadBalancer.FeedFactory
 import org.apache.openwhisk.core.loadBalancer.InvokerPoolFactory
 import org.apache.openwhisk.core.loadBalancer.InvokerState._
@@ -418,11 +403,7 @@ class ShardingContainerPoolBalancerTests
   val concurrency = if (concurrencyEnabled) 5 else 1
   val actionMem = 256.MB
   val actionMetaData =
-    WhiskActionMetaData(
-      namespace,
-      name,
-      js10MetaData(Some("jsMain"), false),
-      limits = actionLimits(actionMem, concurrency))
+    WhiskAction(namespace, name, js10("jsMain"), limits = actionLimits(actionMem, concurrency))
   val maxContainers = invokerMem.toMB.toInt / actionMetaData.limits.memory.megabytes
   val numInvokers = 3
   val maxActivations = maxContainers * numInvokers * concurrency
