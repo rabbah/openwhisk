@@ -348,16 +348,17 @@ object WhiskAction extends DocumentFactory[WhiskAction] with WhiskEntityQueries[
 
   override val collectionName = "actions"
 
-  override implicit val serdes = jsonFormat(
-    WhiskAction.apply,
-    "namespace",
-    "name",
-    "exec",
-    "parameters",
-    "limits",
-    "version",
-    "publish",
-    "annotations")
+  override implicit val serdes = WhiskEntity.augmentedSerdes(
+    jsonFormat(
+      WhiskAction.apply,
+      "namespace",
+      "name",
+      "exec",
+      "parameters",
+      "limits",
+      "version",
+      "publish",
+      "annotations"))
 
   override val cacheEnabled = true
 

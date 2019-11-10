@@ -85,7 +85,7 @@ abstract class WhiskEntity protected[entity] (en: EntityName, val entityType: St
 
   /**
    * A JSON view of the entity, that should match the result returned in a list operation.
-   * This should be synchronized with the views computed in the databse.
+   * This should be synchronized with the views computed in the database.
    * Strictly used in view testing to enforce alignment.
    */
   def summaryAsJson: JsObject = {
@@ -111,6 +111,24 @@ object WhiskEntity {
    */
   def qualifiedName(namespace: EntityPath, activationId: ActivationId) = {
     s"$namespace${EntityPath.PATHSEP}$activationId"
+  }
+
+  /**
+   * A JSON serializer for a whisk entity type which adds fields from the base type
+   * such as "update".
+   *
+   * @param baseSerdes the default serializer for the entity type
+   * @tparam T the entity type
+   * @return a new serdes for the entity type
+   */
+  def augmentedSerdes[T <: WhiskEntity](baseSerdes: RootJsonFormat[T]): RootJsonFormat[T] = {
+    new RootJsonFormat[T] {
+      def write(w: T) = {
+        JsObject(baseSerdes.write(w).asJsObject.fields + ("updated" -> JsNumber(w.updated.toEpochMilli)))
+      }
+
+      def read(value: JsValue) = baseSerdes.read(value)
+    }
   }
 }
 
