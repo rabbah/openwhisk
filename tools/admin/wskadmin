@@ -162,7 +162,13 @@ def parseArgs():
     subcmd = subparser.add_parser('get', help='get contents of database')
     subcmd.add_argument('database', help='the database name')
     subcmd.add_argument('-w', '--view', help='the view in the database to query')
+    subcmd.add_argument('-d', '--doc', help='a specific document in the database to get')
     subcmd.add_argument('--docs', help='include document contents', action='store_true')
+
+    subcmd = subparser.add_parser('delete', help='delete document from database')
+    subcmd.add_argument('database', help='the database name')
+    subcmd.add_argument('id', help='the document id')
+    subcmd.add_argument('rev', help='the document revision')
 
     propmenu = subparsers.add_parser('syslog', help='work with system logs')
     subparser = propmenu.add_subparsers(title='available commands', dest='subcmd')
@@ -179,7 +185,8 @@ def parseArgs():
 
 def userCmd(args, props):
     if args.subcmd == 'create':
-        return createUserCmd(args, props)
+        result = createUserCmd(args, props)
+        return 0 if not isinstance(result, int) else result
     elif args.subcmd == 'delete':
         return deleteUserCmd(args, props)
     elif args.subcmd == 'get':
@@ -199,6 +206,8 @@ def userCmd(args, props):
 def dbCmd(args, props):
     if args.subcmd == 'get':
         return getDbCmd(args, props)
+    elif args.subcmd == 'delete':
+        return deleteDocCmd(args, props)
     else:
         print('unknown command')
         return 2
@@ -255,7 +264,7 @@ def createUserCmd(args, props):
 
     if args.genonly:
         print('%s:%s' % (uid, key))
-        return 0
+        return { 'uid': uid, 'key': key }
 
     (doc, res) = getDocumentFromDb(props, args.subject, args.verbose)
     if doc is None:
@@ -297,6 +306,7 @@ def createUserCmd(args, props):
     if res.status in [201, 202]:
         if not args.silent:
             print('%s:%s' % (uid, key))
+        return { 'uid': uid, 'key': key }
     else:
         print('Failed to create subject (%s)' % res.read().strip())
         return 1
@@ -648,7 +658,7 @@ def getDbCmd(args, props):
         'port'    : port,
         'database': database,
         'design'  : '/_design/' + designdoc +'/_view' if args.view else '',
-        'index'   : viewname if args.view else '_all_docs',
+        'index'   : viewname if args.view else quote_plus(args.doc) if args.doc else '_all_docs' ,
         'docs'    : 'true' if args.docs else 'false'
     }
 
@@ -664,6 +674,34 @@ def getDbCmd(args, props):
         return 0
     print('Failed to get database (%s)' % res.read().strip())
     return 1
+
+
+def deleteDocCmd(args, props):
+    protocol = props[DB_PROTOCOL]
+    host     = props[DB_HOST]
+    port     = props[DB_PORT]
+    username = props[DB_USERNAME]
+    password = props[DB_PASSWORD]
+
+    url = '%(protocol)s://%(host)s:%(port)s/%(database)s/%(doc)s?rev=%(rev)s' % {
+        'protocol': protocol,
+        'host'    : host,
+        'port'    : port,
+        'database': args.database,
+        'doc'     : quote_plus(args.id),
+        'rev'     : args.rev
+    }
+
+    headers = {
+        'Content-Type': 'application/json',
+    }
+
+    res = request('DELETE', url, headers=headers, auth='%s:%s' % (username, password), verbose=args.verbose)
+    if res.status in [200, 202]:
+        print('Document %s/%s %s deleted' % (args.database, args.id, args.rev))
+    else:
+        print('Failed to delete %s/%s %s' % (args.database, args.id, args.rev))
+        return 1
 
 def insertIntoDatabase(props, doc, verbose = False):
     protocol = props[DB_PROTOCOL]
@@ -739,6 +777,112 @@ def extractDate(line):
         return date
     else:
         return None
+
+class objectify(object):
+    def __init__(self, d):
+        self.__dict__ = d
+
+def validateArgs(args):
+    if 'subject' not in args:
+        return {
+            'statusCode': 401,
+            'body': {
+                'error': 'subject must be specified.'
+            }
+        }
+    elif 'DB_HOST' not in args or 'DB_USERNAME' not in args or 'DB_PASSWORD' not in args or 'DB_NAME' not in args:
+        return {
+            'statusCode': 401,
+            'body': {
+                'error': 'db properties are missing.'
+            }
+        }
+    else:
+        return None
+
+def sanitize(s):
+    try:
+        s = s.strip()
+        m = re.search('^[\w]{6,32}$', s)
+        return s if m else None
+    except:
+        return None
+
+def generateNamespace():
+    res = request('get', 'https://frightanic.com/goodies_content/docker-names.php', headers= { 'Connection': 'close' })
+    if res.status == 200:
+        stem = sanitize(res.read().decode('utf-8'))
+        if stem:
+            chars = string.ascii_letters + string.digits
+            mid = ''.join(random.choice(chars) for i in range(6))
+            last = ''.join(random.choice(chars) for i in range(6))
+            return (stem.replace('_', '-')  + '-' + mid + '-' + last).lower()
+        else:
+            return None
+    else:
+        print('error getting a name: %s', res.status)
+        return None
+
+def api(args):
+    error = validateArgs(args)
+    if error is not None:
+        return error
+
+    props = {}
+    props[DB_PROTOCOL] = 'https'
+    props[DB_PORT] = '443'
+    props[DB_HOST] = args['DB_HOST']
+    props[DB_USERNAME] = args['DB_USERNAME']
+    props[DB_PASSWORD] = args['DB_PASSWORD']
+    props[DB_WHISK_AUTHS] = args['DB_NAME']
+
+    subject = sanitize(args['subject'])
+    if not subject:
+        return {
+            'statusCode': 401,
+            'body': {
+                'error': 'subject is not valid (must be an alphanumeric string between 6-32 characters long).'
+            }
+        }
+
+    namespace = generateNamespace()
+    if not namespace:
+        return {
+            'statusCode': 500,
+            'body': {
+                'error': 'failed to generate a namespace.'
+            }
+        }
+
+    params = objectify({
+        'subject': subject,
+        'namespace': namespace,
+        'auth': False,
+        'revoke': False,
+        'genonly': False,
+        'silent': True,
+        'verbose': False
+    })
+
+    result = createUserCmd(params, props)
+
+    if not isinstance(result, int) and 'uid' in result and 'key' in result:
+        return {
+            'statusCode': 201,
+            'body': {
+                'subject': subject,
+                'namespace': namespace,
+                'uuid': result['uid'],
+                'key':  result['key']
+            }
+        }
+    elif isinstance(result, int):
+        return {
+            'statusCode': 500,
+            'body': {
+                'error': 'internal error.'
+            }
+        }
 
 if __name__ == '__main__':
     main()
