@@ -128,7 +128,7 @@ class Controller(val instance: ControllerInstanceId,
   /** The REST APIs. */
   implicit val controllerInstance = instance
   private val apiV1 = new RestAPIVersion(whiskConfig, "api", "v1")
-  private val swagger = new SwaggerDocs(Uri.Path.Empty, "infoswagger.json")
+  private val swagger = new SwaggerDocs(Uri.Path("api")./("v1"), "infoswagger.json")
 
   /**
    * Handles GET /invokers - list of invokers
